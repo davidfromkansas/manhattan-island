@@ -41,6 +41,27 @@
     font:10px ui-monospace,monospace; color:#9fe08a; background:rgba(0,0,0,.5);
     padding:6px 8px; border-radius:6px;
   }
+  #flyhint {
+    position:fixed; left:50%; top:14px; transform:translateX(-50%); z-index:12; display:none;
+    font:11px system-ui,sans-serif; color:rgba(255,255,255,.8); pointer-events:none;
+    background:rgba(10,13,20,.55); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:5px 12px;
+    text-shadow:0 1px 3px rgba(0,0,0,.6);
+  }
+  body.flying #flyhint { display:block; }
+  #joy {
+    position:fixed; left:50%; bottom:96px; transform:translateX(-50%); z-index:30;
+    width:116px; height:116px; border-radius:50%; display:none; touch-action:none;
+    background:rgba(14,18,26,.35); border:1.5px solid rgba(255,255,255,.28);
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  }
+  #joyK {
+    position:absolute; left:50%; top:50%; width:50px; height:50px; border-radius:50%;
+    background:rgba(255,255,255,.5); border:1px solid rgba(255,255,255,.6);
+    transform:translate(-50%,-50%); pointer-events:none;
+  }
+  body.touchnav #joy { display:block; }
+  body.photo #joy { display:none; }
   #chip {
     position:fixed; top:12px; right:12px; z-index:10;
     font:11px/1.4 system-ui, -apple-system, sans-serif; color:rgba(255,255,255,.85);
@@ -133,7 +154,9 @@
     <button id="photo" title="Photo mode (P)">&#128247;</button>
   </div>
 </div>
-<div id="hint">drag orbit &middot; right-drag pan &middot; scroll to dive &middot; keys 0&ndash;6 views &middot; L light &middot; P photo</div>
+<div id="hint">drag orbit &middot; scroll to dive &middot; WASD to fly &middot; keys 0&ndash;6 views &middot; L light &middot; P photo</div>
+<div id="flyhint">flying &middot; WASD/arrows move &middot; Space/C up/down &middot; Shift boost &middot; Esc exit</div>
+<div id="joy"><div id="joyK"></div></div>
 <div id="dbg"></div>
 <div id="chip"></div>
 <div id="scrub">
@@ -3010,6 +3033,150 @@ addEventListener('keydown', (e) => {
   else if (K === 'escape' && photoMode) togglePhoto();
 });
 setTimeout(() => { ui.hint.style.opacity = '0'; }, 8000);
+
+/* ============================================================
+   26c. Fly navigation — desktop WASD + mouse-look, mobile joystick
+   MIRROR MATH (the canvas presentation is scaleX(-1), see section 4):
+   camera "forward" (getWorldDirection) is what's center-screen, so it
+   needs no correction. But screen-right = camera-space LEFT, so both
+   the strafe axis and mouse-look yaw flip sign vs a normal FPS.
+   Pointer-lock mousemove events are trusted+unmirrored (the shim only
+   rewrites pointer* events); canvas pointer drags arrive as SYNTHETIC
+   events with mirrored clientX, so touch-look flips sign again.
+   ============================================================ */
+const fly = (() => {
+  const touchNav = matchMedia('(pointer: coarse)').matches;
+  const st = { on: false, yaw: 0, pitch: 0, keys: new Set(), joy: { x: 0, y: 0 }, vel: new THREE.Vector3() };
+  const _fwd = new THREE.Vector3(), _right = new THREE.Vector3(), _move = new THREE.Vector3(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
+  const LOOK = 0.0024, PITCH_MAX = 1.5;
+  function syncFromCamera() {
+    _e.setFromQuaternion(camera.quaternion, 'YXZ');
+    st.yaw = _e.y; st.pitch = clamp(_e.x, -PITCH_MAX, PITCH_MAX);
+  }
+  function enter(withLock) {
+    if (st.on) { if (withLock) lock(); return; }
+    camTween = null;
+    // cancel any chip-follow (they all listen for pointerdown on the canvas)
+    // — dispatched BEFORE st.on flips so our own drag-look handler ignores it
+    renderer.domElement.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    st.on = true;
+    controls.enabled = false;
+    syncFromCamera();
+    st.vel.set(0, 0, 0);
+    document.body.classList.add('flying');
+    if (withLock) lock();
+  }
+  function lock() {
+    try { const p = renderer.domElement.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch { /* drag-look fallback */ }
+  }
+  function exit() {
+    if (!st.on || touchNav) return; // mobile stays in fly mode
+    st.on = false;
+    st.keys.clear();
+    document.body.classList.remove('flying');
+    if (document.pointerLockElement) document.exitPointerLock();
+    // hand back to orbit, aimed at what we're looking at
+    camera.getWorldDirection(_fwd);
+    controls.target.copy(camera.position).addScaledVector(_fwd, 700);
+    controls.target.y = clamp(controls.target.y, 0, 6500);
+    controls.enabled = true;
+    controls.update();
+  }
+  document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement) exit(); });
+  // ---- desktop keys (WASD/arrows enter fly mode; Esc exits via pointer lock or directly) ----
+  const KEYMAP = { w: 'f', arrowup: 'f', s: 'b', arrowdown: 'b', a: 'l', arrowleft: 'l', d: 'r', arrowright: 'r', ' ': 'u', c: 'd' };
+  addEventListener('keydown', (e) => {
+    const t = e.target && e.target.tagName;
+    if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
+    const k = KEYMAP[e.key.toLowerCase()];
+    if (e.key === 'Escape') { exit(); return; }
+    if (!k) return;
+    if (!st.on && (e.key === ' ' || e.key.toLowerCase() === 'c')) return; // space/c only act once flying
+    e.preventDefault(); // keep arrows/space from scrolling or re-clicking focused buttons
+    enter(true);
+    st.keys.add(k);
+  });
+  addEventListener('keyup', (e) => { const k = KEYMAP[e.key.toLowerCase()]; if (k) st.keys.delete(k); });
+  addEventListener('blur', () => st.keys.clear());
+  // ---- mouse-look: trusted mousemove while pointer-locked (unmirrored) ----
+  addEventListener('mousemove', (e) => {
+    if (!st.on || !document.pointerLockElement) return;
+    st.yaw += e.movementX * LOOK;            // mirrored display: sign flipped vs normal FPS
+    st.pitch = clamp(st.pitch - e.movementY * LOOK, -PITCH_MAX, PITCH_MAX);
+  });
+  // ---- drag-look on the canvas (touch, or desktop fallback when lock fails) ----
+  // these arrive as the shim's synthetic events (mirrored clientX): flip X again
+  let lookId = null, lx = 0, ly = 0;
+  renderer.domElement.addEventListener('pointerdown', (e) => {
+    if (!st.on || document.pointerLockElement || lookId !== null) return;
+    lookId = e.pointerId; lx = e.clientX; ly = e.clientY;
+  });
+  renderer.domElement.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== lookId) return;
+    st.yaw += (lx - e.clientX) * LOOK * 1.4;  // mirrored twice → net: drag right looks right
+    st.pitch = clamp(st.pitch - (e.clientY - ly) * LOOK * 1.4, -PITCH_MAX, PITCH_MAX);
+    lx = e.clientX; ly = e.clientY;
+  });
+  for (const t of ['pointerup', 'pointercancel'])
+    renderer.domElement.addEventListener(t, (e) => { if (e.pointerId === lookId) lookId = null; });
+  // ---- mobile joystick (its events target #joy, so the shim leaves them raw) ----
+  // wiring always attaches (testable, element hidden on desktop); touch devices show it + auto-fly
+  {
+    const joy = document.getElementById('joy'), knob = document.getElementById('joyK');
+    let jid = null;
+    const setKnob = (x, y) => { knob.style.transform = 'translate(calc(-50% + ' + (x * 33) + 'px), calc(-50% + ' + (y * 33) + 'px))'; };
+    const track = (e) => {
+      const r = joy.getBoundingClientRect();
+      const dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+      const dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+      const m = Math.hypot(dx, dy) || 1, s = m > 1 ? 1 / m : 1;
+      st.joy.x = dx * s; st.joy.y = dy * s;
+      setKnob(st.joy.x, st.joy.y);
+    };
+    joy.addEventListener('pointerdown', (e) => { jid = e.pointerId; try { joy.setPointerCapture(jid); } catch { } track(e); e.preventDefault(); });
+    joy.addEventListener('pointermove', (e) => { if (e.pointerId === jid) track(e); });
+    for (const t of ['pointerup', 'pointercancel'])
+      joy.addEventListener(t, (e) => { if (e.pointerId === jid) { jid = null; st.joy.x = st.joy.y = 0; setKnob(0, 0); } });
+  }
+  if (touchNav) {
+    document.body.classList.add('touchnav');
+    const fh = document.getElementById('flyhint');
+    fh.textContent = 'joystick to fly · drag to look';
+    fh.style.transition = 'opacity 1.5s';
+    setTimeout(() => { fh.style.opacity = '0'; }, 10000);
+    enter(false); // mobile is always in fly mode (drag = look, joystick = move)
+  }
+  // ---- per-frame integration ----
+  function tick(dt) {
+    if (!st.on) return;
+    if (camTween) { syncFromCamera(); return; } // presets/chip-flights drive the camera; re-sync and wait
+    _e.set(st.pitch, st.yaw, 0, 'YXZ');
+    camera.quaternion.setFromEuler(_e);
+    camera.getWorldDirection(_fwd);
+    _right.crossVectors(_fwd, camera.up).normalize();
+    let f = 0, r = 0, u = 0;
+    if (st.keys.has('f')) f += 1; if (st.keys.has('b')) f -= 1;
+    if (st.keys.has('r')) r += 1; if (st.keys.has('l')) r -= 1;
+    if (st.keys.has('u')) u += 1; if (st.keys.has('d')) u -= 1;
+    f -= st.joy.y; r += st.joy.x;
+    const boost = st.keys.has('shift') ? 3.5 : 1;
+    const speed = clamp(camera.position.y * 1.6, 90, 4200) * boost;
+    // screen-right = camera-space left on the mirrored display → strafe uses −right
+    _move.set(0, 0, 0).addScaledVector(_fwd, f).addScaledVector(_right, -r);
+    _move.y += u * 0.9;
+    if (_move.lengthSq() > 1) _move.normalize();
+    _move.multiplyScalar(speed);
+    st.vel.lerp(_move, 1 - Math.exp(-dt * 7));
+    camera.position.addScaledVector(st.vel, dt);
+    // keep focus/shadows/chips aimed where we fly
+    controls.target.copy(camera.position).addScaledVector(_fwd, 700);
+    controls.target.y = clamp(controls.target.y, 0, 6500);
+  }
+  addEventListener('keydown', (e) => { if (e.key === 'Shift') st.keys.add('shift'); });
+  addEventListener('keyup', (e) => { if (e.key === 'Shift') st.keys.delete('shift'); });
+  return { tick, enter, exit, st, _pos: () => camera.position.toArray().map(v => Math.round(v)) };
+})();
+window.__fly = fly; // dev/testing hook
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
@@ -4545,7 +4712,8 @@ function frame() {
     controls.target.lerpVectors(camTween.t0, camTween.t1, e);
     if (camTween.t >= 1) camTween = null;
   }
-  controls.update();
+  fly.tick(dt);
+  if (!fly.st.on) controls.update();
   // keep the camera out of the ground / water
   if (camera.position.y < 6) camera.position.y = 6;
   controls.target.y = clamp(controls.target.y, 0, 6500); // allow aiming up at the cloud deck
