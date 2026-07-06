@@ -1,0 +1,6 @@
+# secrets — OpenSky credentials live in env vars on Vercel, this file locally
+opensky-credentials.json
+
+.vercel
+.DS_Store
+node_modules
