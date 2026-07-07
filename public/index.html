@@ -6682,11 +6682,7 @@ const birds = (() => {
   // the birds cross the frame. Quiet sky → a would-be vantage over midtown.
   function vantage() {
     let cx = 0, cy = 0, cz = 0, n = 0;
-    for (let i = 0; i < N; i++) {
-      const b = B[i];
-      if (b.z < 2000 || b.z > 18000) continue;
-      cx += b.x; cy += b.y; cz += b.z; n++;
-    }
+    for (let i = 0; i < N; i++) { const b = B[i]; cx += b.x; cy += b.y; cz += b.z; n++; }
     if (n > 3) { cx /= n; cy /= n; cz /= n; }
     else { cx = -200; cz = 9800; cy = D && D.aloft > 0 ? yFor({ yr: 0.5 }) : 240; }
     const bx = Math.sin(hd), bz = Math.cos(hd);
