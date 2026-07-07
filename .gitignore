@@ -1,5 +1,6 @@
-# secrets — OpenSky credentials live in env vars on Vercel, this file locally
+# secrets — live in env vars on Vercel, these files locally
 opensky-credentials.json
+mta-bus-key.json
 
 .vercel
 .DS_Store
