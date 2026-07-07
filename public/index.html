@@ -204,6 +204,28 @@
     border-radius:8px; padding:3px 10px;
   }
   #agentForm button:disabled { opacity:.4; cursor:default; }
+  #agentHead { display:flex; align-items:center; gap:6px; padding:0 2px 2px; }
+  #agentHead b { font-size:11px; color:rgba(255,255,255,.92); margin-right:auto; }
+  #agentHead button {
+    font:11px system-ui,sans-serif; color:rgba(255,255,255,.75); cursor:pointer;
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.10);
+    border-radius:7px; padding:1px 7px;
+  }
+  #agentHead button:hover { background:rgba(255,255,255,.16); }
+  #agentLayerChip {
+    display:none; font-size:10px; color:#e8a558; cursor:pointer; white-space:nowrap;
+    background:rgba(232,165,88,.12); border:1px solid rgba(232,165,88,.3);
+    border-radius:7px; padding:1px 7px; max-width:150px; overflow:hidden; text-overflow:ellipsis;
+  }
+  #agentUses { display:none; max-height:44vh; overflow-y:auto; scrollbar-width:thin; padding:2px; }
+  body.aguses #agentUses { display:block; }
+  body.aguses #agentLog { display:none; }
+  #agentUses h4 { margin:7px 0 3px; font-size:10px; letter-spacing:.6px; text-transform:uppercase; color:rgba(140,190,255,.85); }
+  #agentUses div {
+    cursor:pointer; border-radius:7px; padding:3px 7px; margin:2px 0;
+    background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); color:rgba(255,255,255,.8);
+  }
+  #agentUses div:hover { background:rgba(25,45,70,.78); border-color:rgba(140,190,255,.4); }
   body.photo #agentFab, body.photo #agentPanel { display:none !important; }
   /* the world was authored +x=east/+z=north, which a right-handed renderer displays
      mirror-imaged (looking north puts east on screen-LEFT). Mirroring the presented
@@ -259,6 +281,8 @@
 </div>
 <button id="agentFab" title="City Concierge — ask about live NYC, or say where to fly">✦</button>
 <div id="agentPanel">
+  <div id="agentHead"><b>City Concierge ✦</b><span id="agentLayerChip" title="clear this layer"></span><button id="agentInfoBtn" title="what can I ask?">ⓘ</button></div>
+  <div id="agentUses"></div>
   <div id="agentLog"></div>
   <form id="agentForm"><input id="agentIn" type="text" maxlength="300" placeholder="Ask the city… “show me Times Square”" autocomplete="off"><button type="submit" title="send">➤</button></form>
 </div>
@@ -7112,20 +7136,23 @@ applyHash();
 /* ============================================================
    26d. City Concierge — sandboxed LLM agent chat (POST /api/agent).
    The server (lib/agent-core.js) runs read-only tools over the
-   twin's own cached feeds and may return ONE validated camera
-   intent per turn; nothing else in the scene is writable by it.
-   Camera application: presets reuse flyTo(); lat/lon targets go
-   through subway.geoRaw — the calibrated pipeline (IRON RULE 1),
-   never re-derived — and tween via the existing camTween. The
-   look direction comes from projecting a short geo step along
-   the requested compass heading through the same transform, so
-   the 29° grid rotation and the mirrored presentation are
-   handled for free.
+   twin's feeds + the baked street graph/buildings, and returns
+   validated INTENTS the browser applies: camera (camTween; lat/
+   lon via subway.geoRaw — IRON RULE 1, never re-derived — or
+   scene {sx,sz} used directly since the bake is already
+   calibrated), result layers (pins/labels/rings/street lines,
+   one Points + LineSegments group, labels reuse the .fybl chip
+   pattern with the mirror-corrected projection), and timeline
+   scrubs (timeline.set). Viewer context (camera target scene
+   coords + matchStreet street/borough + scrub) rides along with
+   every message so "around here" questions resolve.
    ============================================================ */
 const concierge = (() => {
   const fab = document.getElementById('agentFab'), log = document.getElementById('agentLog'),
         form = document.getElementById('agentForm'), input = document.getElementById('agentIn'),
-        sendBtn = form.querySelector('button');
+        sendBtn = form.querySelector('button'), infoBtn = document.getElementById('agentInfoBtn'),
+        layerChip = document.getElementById('agentLayerChip'), usesEl = document.getElementById('agentUses');
+  const BORO_N = ['', 'Manhattan', 'Bronx', 'Brooklyn', 'Queens', 'Staten Island'];
   const hist = []; // plain {role, content} text turns; server keeps the last 16
   let busy = false, greeted = false;
   function add(cls, text) {
@@ -7134,52 +7161,205 @@ const concierge = (() => {
     log.appendChild(d); log.scrollTop = log.scrollHeight;
     return d;
   }
+  /* --- result layers: screen-size pins + pooled label chips + buffer rings +
+         street polylines. One THREE group, disposed wholesale on replace. --- */
+  const lfx = (() => {
+    const COL = { amber: 0xe8a558, cyan: 0x4fd6ff, ember: 0xff8a66, green: 0x6cbe45, violet: 0xb08aff, white: 0xffffff };
+    const group = new THREE.Group();
+    scene.add(group);
+    const pinTex = (() => { // ring + core dot, tinted by vertex color
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const g = c.getContext('2d');
+      g.strokeStyle = '#fff'; g.lineWidth = 6; g.beginPath(); g.arc(32, 32, 22, 0, TAU); g.stroke();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(32, 32, 10, 0, TAU); g.fill();
+      return new THREE.CanvasTexture(c);
+    })();
+    const meshes = [];
+    const lbl = []; // pooled label chips (fybl pattern; click = dive to the pin)
+    for (let i = 0; i < 10; i++) {
+      const el = document.createElement('div');
+      el.className = 'fybl';
+      document.body.appendChild(el);
+      el.addEventListener('click', () => { const o = lbl[i].o; if (!o) return;
+        camTween = { p0: camera.position.clone(), t0: controls.target.clone(),
+          p1: new THREE.Vector3(o.x + 80, 330, o.z - 360), t1: new THREE.Vector3(o.x, 0, o.z), t: 0, dur: 1.7 }; });
+      lbl.push({ el, o: null });
+    }
+    const toXZ = (p) => { // layer geometry arrives in either space
+      if (p.sx != null && isFinite(p.sx)) return { x: +p.sx, z: +p.sz };
+      if (isFinite(p.lat) && isFinite(p.lon)) { const g = subway.geoRaw(p.lat, p.lon); return { x: g.x, z: g.z }; }
+      return null;
+    };
+    function clear() {
+      for (const m of meshes) { group.remove(m); m.geometry.dispose(); m.material.dispose(); }
+      meshes.length = 0;
+      for (const L of lbl) { L.o = null; L.el.style.display = 'none'; }
+      layerChip.style.display = 'none';
+    }
+    function show(layers) {
+      clear();
+      const allXZ = [], labelPool = [];
+      for (const ly of layers) {
+        const col = new THREE.Color(COL[ly.color] || COL.amber);
+        const P = (ly.points || []).map(toXZ);
+        const good = P.filter(Boolean);
+        if (good.length) {
+          const pos = new Float32Array(good.length * 3), cols = new Float32Array(good.length * 3);
+          good.forEach((q, i) => { pos[i * 3] = q.x; pos[i * 3 + 1] = 38; pos[i * 3 + 2] = q.z;
+            cols[i * 3] = col.r; cols[i * 3 + 1] = col.g; cols[i * 3 + 2] = col.b; allXZ.push(q); });
+          const ge = new THREE.BufferGeometry();
+          ge.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+          ge.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+          const m = new THREE.Points(ge, new THREE.PointsMaterial({ size: 18, sizeAttenuation: false, map: pinTex,
+            transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, vertexColors: true }));
+          m.frustumCulled = false; group.add(m); meshes.push(m);
+          (ly.points || []).forEach((p, i) => { if (p.label && P[i] && labelPool.length < 10)
+            labelPool.push({ x: P[i].x, z: P[i].z, label: p.label }); });
+        }
+        if (ly.segs && ly.segs.length) { // street highlight (scene-space segments from the baked graph)
+          const pos = new Float32Array(ly.segs.length * 6);
+          ly.segs.forEach((s, i) => { pos[i * 6] = s[0]; pos[i * 6 + 1] = 10; pos[i * 6 + 2] = s[1];
+            pos[i * 6 + 3] = s[2]; pos[i * 6 + 4] = 10; pos[i * 6 + 5] = s[3];
+            allXZ.push({ x: s[0], z: s[1] }, { x: s[2], z: s[3] }); });
+          const ge = new THREE.BufferGeometry();
+          ge.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+          const m = new THREE.LineSegments(ge, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.9, depthTest: false }));
+          m.frustumCulled = false; group.add(m); meshes.push(m);
+        }
+        if (ly.rings && ly.rings.length) { // buffer circles
+          const SEG = 48, pos = new Float32Array(ly.rings.length * SEG * 6);
+          let k = 0;
+          for (const r of ly.rings) {
+            const c0 = toXZ(r); if (!c0) continue;
+            for (let s = 0; s < SEG; s++) {
+              const a0 = s / SEG * TAU, a1 = (s + 1) / SEG * TAU;
+              pos[k++] = c0.x + Math.cos(a0) * r.radius_m; pos[k++] = 6; pos[k++] = c0.z + Math.sin(a0) * r.radius_m;
+              pos[k++] = c0.x + Math.cos(a1) * r.radius_m; pos[k++] = 6; pos[k++] = c0.z + Math.sin(a1) * r.radius_m;
+            }
+            allXZ.push({ x: c0.x - r.radius_m, z: c0.z - r.radius_m }, { x: c0.x + r.radius_m, z: c0.z + r.radius_m });
+          }
+          if (k) {
+            const ge = new THREE.BufferGeometry();
+            ge.setAttribute('position', new THREE.BufferAttribute(pos.slice(0, k), 3));
+            const m = new THREE.LineSegments(ge, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.7, depthTest: false }));
+            m.frustumCulled = false; group.add(m); meshes.push(m);
+          }
+        }
+      }
+      for (let i = 0; i < lbl.length; i++) {
+        const o = labelPool[i] || null; lbl[i].o = o;
+        if (o) { lbl[i].el.innerHTML = '<b></b>'; lbl[i].el.firstChild.textContent = o.label; lbl[i].el.style.display = 'block'; } // .fybl base CSS is display:none
+      }
+      layerChip.textContent = '✕ ' + layers.map(l => l.title).join(' · ').slice(0, 60);
+      layerChip.style.display = 'inline-block';
+      if (layers.some(l => l.fit) && allXZ.length && !window.__agentNoFit) {
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        for (const q of allXZ) { if (q.x < x0) x0 = q.x; if (q.x > x1) x1 = q.x; if (q.z < z0) z0 = q.z; if (q.z > z1) z1 = q.z; }
+        const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+        const alt = clamp(Math.max(x1 - x0, z1 - z0, 500) * 0.95 + 260, 420, 15000);
+        camTween = { p0: camera.position.clone(), t0: controls.target.clone(),
+          p1: new THREE.Vector3(cx, alt, cz - alt * 1.05), t1: new THREE.Vector3(cx, 0, cz), t: 0, dur: 2.4 };
+      }
+    }
+    const _lv = new THREE.Vector3();
+    function tick() { // glue label chips to their pins (x mirrored with the canvas)
+      for (const L of lbl) {
+        if (!L.o) continue;
+        _lv.set(L.o.x, 44, L.o.z).project(camera);
+        if (_lv.z > 1 || _lv.x < -1.05 || _lv.x > 1.05 || _lv.y < -1.05 || _lv.y > 1.05) { L.el.style.transform = 'translate(-9999px,0)'; continue; }
+        const sx = (0.5 - _lv.x * 0.5) * innerWidth, sy = (-_lv.y * 0.5 + 0.5) * innerHeight;
+        L.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-135%)';
+      }
+    }
+    return { show, clear, tick };
+  })();
+  layerChip.addEventListener('click', () => lfx.clear());
   function applyCam(c) {
     if (!c) return;
     if (c.preset) return flyTo(c.preset);
-    if (typeof c.lat !== 'number' || typeof c.lon !== 'number') return;
-    const g = subway.geoRaw(c.lat, c.lon);
     const alt = clamp(c.altitude_m || 600, 80, 16000);
     const hd = ((c.heading_deg ?? 25) * Math.PI) / 180;
-    const g2 = subway.geoRaw(c.lat + Math.cos(hd) * 0.008,
-                             c.lon + (Math.sin(hd) * 0.008) / Math.cos((c.lat * Math.PI) / 180));
-    let dx = g2.x - g.x, dz = g2.z - g.z;
-    const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+    let tx, tz, dx, dz;
+    if (typeof c.sx === 'number' && typeof c.sz === 'number') {
+      tx = c.sx; tz = c.sz;
+      dx = Math.sin(hd); dz = Math.cos(hd); // the bake is authored +x=east/+z=north
+    } else if (typeof c.lat === 'number' && typeof c.lon === 'number') {
+      const g = subway.geoRaw(c.lat, c.lon);
+      tx = g.x; tz = g.z;
+      // a short geo step along the heading through the same calibrated transform
+      const g2 = subway.geoRaw(c.lat + Math.cos(hd) * 0.008,
+                               c.lon + (Math.sin(hd) * 0.008) / Math.cos((c.lat * Math.PI) / 180));
+      dx = g2.x - g.x; dz = g2.z - g.z;
+      const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+    } else return;
     const dist = alt * 1.25; // ~39° down-tilt, reads like the presets
     camTween = { p0: camera.position.clone(), t0: controls.target.clone(),
-      p1: new THREE.Vector3(g.x - dx * dist, alt, g.z - dz * dist),
-      t1: new THREE.Vector3(g.x, 0, g.z),
+      p1: new THREE.Vector3(tx - dx * dist, alt, tz - dz * dist),
+      t1: new THREE.Vector3(tx, 0, tz),
       t: 0, dur: clamp(c.duration_s || 2.6, 1, 6) };
+  }
+  function applyTimeline(t) {
+    if (t && isFinite(t.scrub_min)) timeline.set(clamp(Math.round(t.scrub_min), -10080, 0));
+  }
+  function viewerContext() {
+    const t = controls.target;
+    let street = '', borough = '';
+    const ms = matchStreet(t.x, t.z, 400);
+    if (ms) { const e = G_EDGES[ms.ei]; street = e.nm; borough = BORO_N[e.bo] || ''; }
+    return { sx: Math.round(t.x), sz: Math.round(t.z), alt_m: Math.round(camera.position.y),
+      street, borough, scrub_min: Math.round(+document.getElementById('timeSlider').value) };
   }
   async function send(text) {
     if (busy || !text) return;
     busy = true; input.disabled = true; sendBtn.disabled = true;
+    document.body.classList.remove('aguses');
     add('me', text);
     hist.push({ role: 'user', content: text });
     const wait = add('wait', 'thinking…');
     try {
       const r = await fetch('/api/agent', { method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: hist.slice(-12) }) });
+        body: JSON.stringify({ messages: hist.slice(-12), context: viewerContext() }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'http ' + r.status);
       hist.push({ role: 'assistant', content: j.reply });
       wait.remove(); add('ai', j.reply);
-      if (j.camera) applyCam(j.camera);
+      if (j.layers) lfx.show(j.layers);
+      if (j.timeline) applyTimeline(j.timeline);
+      if (j.camera) applyCam(j.camera); // explicit camera outranks a layer's fit
     } catch (e) {
       wait.remove(); add('err', String(e.message || e));
     }
     busy = false; input.disabled = false; sendBtn.disabled = false; input.focus();
   }
+  /* --- ⓘ use-case sheet: every capability, one tap to try it --- */
+  const USES = [
+    ['Ask the live city', ['How many aircraft are over NYC right now?', 'How is traffic in Manhattan?', 'How many trains are running on the A?']],
+    ['Fly the camera', ['Zoom in on Times Square', 'Street level at the Brooklyn Bridge, looking at Manhattan', 'Show me the whole island']],
+    ['Map results as layers', ['Map all traffic incidents', 'Map the ferries and label their routes', 'Highlight Broadway end to end']],
+    ['Spatial search + rankings', ['5 slowest roads in Brooklyn right now, on the map', 'Citi Bike docks with e-bikes within 400 m of Broadway & W 45 St', 'Which traffic cameras watch the FDR?']],
+    ['Buffers + coverage', ['How many bike docks within 300 m of each East River ferry? Draw the buffers', 'Ring every road closure with a 250 m buffer']],
+    ['Buildings + streets', ['How many buildings over 150 m tall are in the city?', 'Map the tallest buildings near Wall St & Broad St', 'Where do Broadway and W 4 St cross?']],
+    ['Time travel', ['Show me the city as it was 3 days ago', 'What was the weather yesterday?', 'Back to live']]
+  ];
+  for (const [h, items] of USES) {
+    const hd = document.createElement('h4'); hd.textContent = h; usesEl.appendChild(hd);
+    for (const u of items) {
+      const d = document.createElement('div'); d.textContent = u;
+      d.addEventListener('click', () => { input.value = ''; send(u); });
+      usesEl.appendChild(d);
+    }
+  }
+  infoBtn.addEventListener('click', () => document.body.classList.toggle('aguses'));
   fab.addEventListener('click', () => {
     const on = document.body.classList.toggle('agent');
-    if (on && !greeted) { greeted = true; add('ai', 'Ask me about live NYC — trains, ferries, planes, traffic, weather — or tell me where to fly.'); }
+    if (on && !greeted) { greeted = true; add('ai', 'Ask me about live NYC — or tell me where to fly, what to map, or when to rewind to. Tap ⓘ for everything I can do.'); }
     if (on) input.focus();
   });
-  // the global keydown handler binds 0–6/H/P/L; typing here must not fly the camera
+  // the global keydown handler binds 0–7/H/P/L; typing here must not fly the camera
   input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { document.body.classList.remove('agent'); fab.focus(); } e.stopPropagation(); });
   form.addEventListener('submit', (e) => { e.preventDefault(); const t = input.value.trim(); input.value = ''; send(t); });
-  return { send, applyCam };
+  return { send, applyCam, applyTimeline, showLayers: lfx.show, clearLayer: lfx.clear, tick: lfx.tick };
 })();
 window.__agent = concierge; // dev/testing hook
 
@@ -7230,6 +7410,7 @@ function frame() {
   cells.tick(T, dt, _focus, camY);
   steam.tick(_focus, camY);
   flags.tick(dt, _focus, camY);
+  concierge.tick(); // agent-layer label chips track their pins
   renderer.render(scene, camera);
   precipOverlay.render(); // screen-space rain/snow veil, drawn on top
   fpsN++; fpsT += dt;

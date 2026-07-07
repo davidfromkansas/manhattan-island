@@ -30,7 +30,7 @@ city state; a timeline slider scrubs the city back through the last 7 days.
 | `server.js` | Local dev server: static `public/` + `/api/*`. `node server.js` → http://localhost:4173 |
 | `api/index.js` | Vercel catch-all → `handleApi` (vercel.json rewrites `/api/(.*)` → it; real files in `api/` win over the rewrite) |
 | `api/record.js` | Nightly snapshot cron (05:05 UTC): fetches own APIs, commits to `data` branch via GitHub API |
-| `lib/agent-core.js` | "City Concierge" LLM agent: read-only tools over the cached feeds + validated camera intents. Raw-fetch to Vercel AI Gateway (Anthropic-compat endpoint), per-IP rate limits. Chat UI = index.html §26d. |
+| `lib/agent-core.js` | "City Concierge" LLM agent: read-only tools (live feeds w/ near/sort filters, buildings + street-graph queries in scene meters, history, buffer reports) + validated intents (camera, map layers, timeline scrub). Raw-fetch to Vercel AI Gateway (Anthropic-compat), per-IP rate limits. Chat UI + layer renderer = index.html §26d. Substrate JSONs lazy-load from disk locally / self-fetch of the deployed static files on Vercel. |
 | `api/agent.js` | Vercel function for POST `/api/agent` → `handleAgent` (server.js mirrors it locally) |
 | `scripts/record.mjs` | Manual/local recorder (same frame format) |
 | `public/streets.json` | Real street graph: 86,471 CSCL edges + 57,450 nodes (see schema below) |
