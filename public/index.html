@@ -4403,6 +4403,11 @@ const precipOverlay = (() => {
 const HIST = { active: false, day: '', epochS: 0, liveWx: null };
 // live bird-migration readout (BirdCast) — written by the birds module, read by the chip
 const BIRDS = { aloft: 0, night: false, passed: 0, pct: null };
+// what the user last clicked/followed in the scene — appended to concierge requests
+// so "what am I following?" just works. Every chip/ride-along click calls setFocus.
+const FOCUS = { kind: '', label: '', data: null, at: 0 };
+function setFocus(kind, label, data) { FOCUS.kind = kind; FOCUS.label = label; FOCUS.data = data; FOCUS.at = Date.now(); }
+window.__focus = FOCUS; // dev/testing hook
 const ordinal = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][Math.min(n % 10, 4)] || 'th');
 const live = (() => {
   const FAKE = { time: null, weather: null };
@@ -5004,6 +5009,9 @@ const flights = (() => {
   let follow = null;
   const followOff = new THREE.Vector3(), followPrev = new THREE.Vector3();
   function flyToPlane(p) {
+    setFocus('aircraft (live ADS-B)', p.cs + (p.route ? ' · ' + p.route : ''),
+      { callsign: p.cs, type: p.type, route: p.route || null,
+        alt_ft: Math.max(0, Math.round(p.pos.y / FT)), speed_kt: Math.round(p.spd / KT) });
     follow = p;
     const sp = Math.max(1, Math.hypot(p.v.x, p.v.z));
     const bx = -p.v.x / sp, bz = -p.v.z / sp; // unit "behind" direction
@@ -5453,6 +5461,8 @@ const subway = (() => {
   let follow = null;
   const followPrev = new THREE.Vector3(), followOff = new THREE.Vector3();
   function flyToBeacon(tr) {
+    setFocus('subway train (live GTFS-rt)', tr.route + ' ' + (tr.dir || '') + (tr.dest ? ' → ' + tr.dest : ''),
+      { route: tr.route, direction: tr.dir, destination: tr.dest, next_stop: tr.next || null });
     follow = tr;
     followPrev.set(tr.px, 0, tr.pz);
     followOff.copy(camera.position).sub(followPrev); // approach from the camera's current bearing
@@ -5747,6 +5757,9 @@ const ferries = (() => {
   let fyFollow = null;
   const fyFollowPrev = new THREE.Vector3(), fyFollowOff = new THREE.Vector3();
   function flyToVessel(v) {
+    setFocus('NYC Ferry (live GPS)', v.route ? v.route + ' → ' + (v.headsign || '') : (v.label || 'ferry'),
+      { vessel: v.label, route: v.route, headsign: v.headsign, next_stop: v.next,
+        eta_min: v.eta, docked: !!v.docked, speed_kt: Math.round((v.spd || 0) * 1.944) });
     fyFollow = v;
     fyFollowPrev.copy(v.pos);
     fyFollowOff.copy(camera.position).sub(v.pos); fyFollowOff.y = 0;
@@ -5932,6 +5945,7 @@ const cams = (() => {
       (HIST.active ? ' · cameras are live-only — this is now' : '');
   }
   function open(cm) {
+    setFocus('traffic camera (live feed)', cm.name + (cm.area ? ' · ' + cm.area : ''), { name: cm.name, area: cm.area });
     active = cm;
     title();
     vImg.removeAttribute('src');
@@ -6083,6 +6097,8 @@ const buses = (() => {
   let bFollow = null;
   const bFollowPrev = new THREE.Vector3(), bFollowOff = new THREE.Vector3();
   function flyToBus(v) {
+    setFocus('MTA bus (live GPS)', (v.route || 'bus') + (v.dest ? ' → ' + v.dest : ''),
+      { route: v.route, destination: v.dest, street: v.street, speed_mph: Math.round((v.spd || 0) * 2.237) });
     bFollow = v;
     bFollowPrev.copy(v.pos);
     bFollowOff.copy(camera.position).sub(v.pos); bFollowOff.y = 0;
@@ -6660,6 +6676,12 @@ const birds = (() => {
   let bfFollow = null;
   const bfPrev = new THREE.Vector3(), bfOff = new THREE.Vector3();
   function flyToFlock(b) {
+    const { s, lowConf } = boData(b);
+    setFocus('bird flock (radar migration)', 'migration over ' + (BONAMES[b.bo] || 'NYC'), {
+      borough: BONAMES[b.bo] || 'NYC', birds_aloft_radar_est: Math.round(s.aloft || 0),
+      heading_deg_toward: Math.round(s.dirDeg || 0), speed_ms: Math.round((s.speedMs || 0) * 10) / 10,
+      mean_height_m: Math.round(s.hMeanM || 0), max_height_m: Math.round(s.hMaxM || 0),
+      crossed_since_reset: Math.round(s.passed || 0), low_confidence: lowConf, rendered_birds_in_borough: NB[b.bo] || 0 });
     bfFollow = b;
     bfPrev.set(b.x, b.y, b.z);
     const P = BD[b.bo] || BD.mn;
@@ -6671,16 +6693,19 @@ const birds = (() => {
   }
   renderer.domElement.addEventListener('pointerdown', () => { bfFollow = null; });
   renderer.domElement.addEventListener('wheel', () => { bfFollow = null; }, { passive: true });
-  function chipHTML(b) {
+  function boData(b) { // the borough measurement this bird visualizes (chips + focus share it)
     const bos = (D && D.boroughs) || { mn: D };
     const s = bos[b.bo] || bos.mn || D || {};
+    const lowConf = s.enabled === false || (s.enabled === undefined && D && D.enabled === false);
+    return { s, lowConf };
+  }
+  function chipHTML(b) { // deliberately spare: count · height · speed (detail lives in the concierge)
+    const { s, lowConf } = boData(b);
     const mph = Math.round((s.speedMs || 0) * 2.237);
     const comp = COMP8[Math.round((s.dirDeg || 0) / 45) % 8];
-    const ratio = NB[b.bo] > 0 ? Math.max(1, Math.round((s.aloft || 0) / NB[b.bo])) : 1;
-    const lowConf = s.enabled === false || (s.enabled === undefined && D && D.enabled === false);
     return '<b>Migration radar · ' + (BONAMES[b.bo] || 'NYC') + '</b><br><span class="sub">' +
-      '≈' + Math.round(s.aloft || 0).toLocaleString('en-US') + ' birds aloft (radar est.) · ' + comp + ' ' + mph + ' mph · ~' +
-      Math.round(s.hMeanM || 0) + ' m up · 1 shown ≈ ' + ratio + ' aloft' +
+      '≈' + Math.round(s.aloft || 0).toLocaleString('en-US') + ' birds aloft (radar est.) · ~' +
+      Math.round(s.hMeanM || 0) + ' m · ' + comp + ' ' + mph + ' mph' +
       (lowConf ? ' · daytime — low confidence' : '') + '</span>';
   }
   const _bcV = new THREE.Vector3();
@@ -7440,8 +7465,13 @@ const concierge = (() => {
     let street = '', borough = '';
     const ms = matchStreet(t.x, t.z, 400);
     if (ms) { const e = G_EDGES[ms.ei]; street = e.nm; borough = BORO_N[e.bo] || ''; }
-    return { sx: Math.round(t.x), sz: Math.round(t.z), alt_m: Math.round(camera.position.y),
+    const ctx = { sx: Math.round(t.x), sz: Math.round(t.z), alt_m: Math.round(camera.position.y),
       street, borough, scrub_min: Math.round(+document.getElementById('timeSlider').value) };
+    if (FOCUS.at && Date.now() - FOCUS.at < 900_000) { // clicked within the last 15 min
+      ctx.focus_kind = FOCUS.kind; ctx.focus_label = FOCUS.label;
+      ctx.focus_age_s = Math.round((Date.now() - FOCUS.at) / 1000); ctx.focus_data = FOCUS.data;
+    }
+    return ctx;
   }
   async function send(text) {
     if (busy || !text) return;
