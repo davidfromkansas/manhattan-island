@@ -135,6 +135,8 @@
   body.photo .fybl { display:none !important; }
   .fybl.bus { border-color:rgba(255,196,80,.4); } /* bus chips: MTA-bus amber accent */
   .fybl.bus b { color:#ffc450; }
+  .fybl.bike { border-color:rgba(80,214,255,.4); }
+  .fybl.bike b { color:#4fd6ff; }
   .flbl b { color:#fff; font-weight:600; }
   .flbl .sub { color:rgba(255,255,255,.55); }
   body.photo .flbl { display:none !important; }
@@ -5931,6 +5933,268 @@ const buses = (() => {
 window.__buses = buses; // dev/testing hook
 
 /* ============================================================
+   25e. CITI BIKE — three layers from the live GBFS feed:
+   (1) every real dock station, color+height = live fill;
+   (2) honest arrival/departure pulses from station deltas;
+   (3) SIMULATED riders (clearly synthetic — cyan glow) flowing
+   along the real street graph from draining docks to filling
+   ones. GBFS publishes no rider GPS; only (1)+(2) are real.
+   ============================================================ */
+const citibike = (() => {
+  const ST = [];                 // { id, name, x, z, node, cap, bikes, ebikes, docks, on, slot }
+  const byId = new Map();
+  let stMesh = null;
+  const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _v = new THREE.Vector3();
+  const _up = new THREE.Vector3(0, 1, 0), _c = new THREE.Color();
+  // ---- station markers: instanced posts, color+height by fill ----
+  function buildStations() {
+    const geo = new THREE.BoxGeometry(3.2, 8, 3.2); geo.translate(0, 4, 0);
+    stMesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ emissive: 0x226077, emissiveIntensity: 0.35 }), ST.length);
+    stMesh.frustumCulled = false;
+    scene.add(stMesh);
+  }
+  function styleStation(st) {
+    const fill = st.cap > 0 ? clamp(st.bikes / st.cap, 0, 1) : 0;
+    // empty=warm red -> half=pale -> full=citibike blue
+    if (!st.on) _c.setRGB(0.25, 0.25, 0.28);
+    else if (fill < 0.5) _c.setRGB(0.85 - fill * 0.9, 0.30 + fill * 0.9, 0.35 + fill * 0.5);
+    else _c.setRGB(0.15, 0.45 + (fill - 0.5) * 0.5, 0.85);
+    stMesh.setColorAt(st.slot, _c);
+    st.h = 0.35 + fill * 1.05; // scale factor applied per frame with distance scaling
+  }
+  // ---- pulses: additive sprites, amber = checkout, cyan = dock ----
+  const PN = 72;
+  const pGeo = new THREE.BufferGeometry();
+  const pPos = new Float32Array(PN * 3), pCol = new Float32Array(PN * 3), pSize = new Float32Array(PN);
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+  pGeo.setAttribute('aSize', new THREE.BufferAttribute(pSize, 1));
+  const pMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uDpr: { value: renderer.getPixelRatio() } },
+    vertexShader: `attribute float aSize; varying vec3 vC; uniform float uDpr;
+      void main() { vC = color; vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = aSize * uDpr * clamp(2600.0 / -mv.z, 0.4, 3.0); gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `varying vec3 vC;
+      void main() { float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard;
+        gl_FragColor = vec4(vC, (1.0 - d * 2.0) * 0.9); }`,
+    vertexColors: true
+  });
+  const pulses = []; // { i, t }
+  let pNext = 0;
+  const pMesh = new THREE.Points(pGeo, pMat);
+  pMesh.frustumCulled = false; pMesh.renderOrder = 7;
+  scene.add(pMesh);
+  function pulse(x, z, kind) { // kind 0 = departure (amber), 1 = arrival (cyan)
+    const i = pNext = (pNext + 1) % PN;
+    pPos[i * 3] = x; pPos[i * 3 + 1] = 10; pPos[i * 3 + 2] = z;
+    if (kind) { pCol[i * 3] = 0.3; pCol[i * 3 + 1] = 0.85; pCol[i * 3 + 2] = 1.0; }
+    else { pCol[i * 3] = 1.0; pCol[i * 3 + 1] = 0.72; pCol[i * 3 + 2] = 0.25; }
+    pulses.push({ i, t: 0 });
+  }
+  // ---- SIMULATED riders (cyan — the one synthetic layer) ----
+  const RN = 150;
+  const _part = (g, r, gg, b) => { const n = g.attributes.position.count, c = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { c[i * 3] = r; c[i * 3 + 1] = gg; c[i * 3 + 2] = b; }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3)); return g; };
+  const bikeGeo = BufferGeometryUtils.mergeGeometries([
+    _part(new THREE.BoxGeometry(0.5, 1.1, 2.2).translate(0, 0.8, 0), 0.10, 0.12, 0.15),  // frame/wheels
+    _part(new THREE.BoxGeometry(0.8, 1.2, 0.7).translate(0, 1.9, -0.1), 0.30, 0.85, 1.0) // rider (cyan = simulated)
+  ]);
+  const rMesh = new THREE.InstancedMesh(bikeGeo, new THREE.MeshLambertMaterial({
+    vertexColors: true, emissive: 0x2bc7f0, emissiveIntensity: 0.5 }), RN);
+  rMesh.frustumCulled = false;
+  const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  for (let i = 0; i < RN; i++) rMesh.setMatrixAt(i, _zero);
+  scene.add(rMesh);
+  const riders = [];
+  const rSlots = []; for (let i = RN - 1; i >= 0; i--) rSlots.push(i);
+  const spawnQ = [];
+  // greedy route on the street graph toward a target node (no bridges/tunnels)
+  function bikeRoute(fromNode, toNode) {
+    const T2 = G_NODES[toNode];
+    const pts = [];
+    let cur = fromNode, prevE = -1, guard = 0;
+    const seen = new Set([fromNode]);
+    while (guard++ < 130) {
+      const N = G_NODES[cur];
+      if (((N[0] - T2[0]) ** 2 + (N[1] - T2[1]) ** 2) < 70 * 70) break;
+      let best = -1, bestD = 1e18, bestN = -1;
+      for (const ei of N[2]) {
+        if (ei === prevE) continue;
+        const e = G_EDGES[ei];
+        if (e.rw === 2 || e.rw === 4) continue;
+        const o = e.a === cur ? e.b : e.a;
+        if (seen.has(o)) continue;
+        const O = G_NODES[o];
+        const d = (O[0] - T2[0]) ** 2 + (O[1] - T2[1]) ** 2;
+        if (d < bestD) { bestD = d; best = ei; bestN = o; }
+      }
+      if (best < 0) break;
+      const e = G_EDGES[best];
+      const p = e.a === cur ? e.p : [...e.p].reverse();
+      for (let i = pts.length ? 1 : 0; i < p.length; i++) pts.push(p[i]);
+      seen.add(bestN); prevE = best; cur = bestN;
+    }
+    return pts.length > 2 ? pts : null;
+  }
+  function spawnRider(src, dst) {
+    if (!rSlots.length || src.node < 0 || dst.node < 0) return;
+    const pts = bikeRoute(src.node, dst.node);
+    if (!pts) return;
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    riders.push({ slot: rSlots.pop(), pts, cum, len: cum[cum.length - 1], s: 0, seg: 0,
+      sp: 5 + Math.random() * 2.5, dst });
+  }
+  // ---- data ----
+  let poll = 4, delay = 30, polling = false, firstBuild = true;
+  const prevBikes = new Map();
+  function ingest(list) {
+    if (firstBuild) {
+      for (const s of list) {
+        const g = subway.geoRaw(s.lat, s.lon);
+        const m = matchStreet(g.x, g.z, 45);
+        const x = m ? m.x : g.x, z = m ? m.z : g.z;
+        if (!onLand(x, z) && !landOK(x, z)) continue;
+        const st = { id: s.id, name: s.name, x, z, node: nearestNode(x, z, 120), cap: s.cap,
+          bikes: s.bikes, ebikes: s.ebikes, docks: s.docks, on: s.on, slot: ST.length, h: 1 };
+        ST.push(st); byId.set(s.id, st);
+      }
+      buildStations();
+      for (const st of ST) styleStation(st);
+      stMesh.instanceColor.needsUpdate = true;
+      console.log('[citibike]', ST.length, 'stations live');
+      firstBuild = false;
+      return;
+    }
+    // deltas → pulses + simulated flows
+    const sources = [], sinks = [];
+    for (const s of list) {
+      const st = byId.get(s.id);
+      if (!st) continue;
+      const prev = prevBikes.get(s.id);
+      const d = prev === undefined ? 0 : s.bikes - prev;
+      st.bikes = s.bikes; st.ebikes = s.ebikes; st.docks = s.docks; st.on = s.on;
+      styleStation(st);
+      if (d < 0) { pulse(st.x, st.z, 0); sources.push([st, -d]); }
+      else if (d > 0) { pulse(st.x, st.z, 1); sinks.push([st, d]); }
+    }
+    stMesh.instanceColor.needsUpdate = true;
+    // pair each draining dock with a nearby filling one (simulation, clearly synthetic)
+    for (const [src, w] of sources) {
+      let best = null, bd = 2800 * 2800;
+      for (const [dst] of sinks) {
+        const d = (dst.x - src.x) ** 2 + (dst.z - src.z) ** 2;
+        if (d > 90 * 90 && d < bd) { bd = d; best = dst; }
+      }
+      if (best) for (let k = 0; k < Math.min(w, 2); k++) spawnQ.push([src, best]);
+    }
+  }
+  function doPoll() {
+    polling = true;
+    fetch('/api/citibike').then(r => r.json()).then(j => {
+      if (!Array.isArray(j.stations) || !j.stations.length) throw 0;
+      const cur = new Map();
+      for (const s of j.stations) cur.set(s.id, s.bikes);
+      ingest(j.stations);
+      for (const [k, v] of cur) prevBikes.set(k, v);
+      delay = 30;
+    }).catch(() => { delay = Math.min(delay * 2, 240); })
+      .finally(() => { polling = false; poll = T + delay; });
+  }
+  // ---- chips ----
+  const chips = [];
+  for (let i = 0; i < 4; i++) {
+    const el = document.createElement('div');
+    el.className = 'fybl bike';
+    document.body.appendChild(el);
+    chips.push({ el, st: null, html: '' });
+  }
+  let chipT = 0;
+  const near = [];
+  function assignChips() {
+    near.length = 0;
+    for (const st of ST) {
+      const d = _v.set(st.x, 15, st.z).distanceTo(camera.position);
+      if (d >= 3200) continue;
+      _v.set(st.x, 15, st.z).project(camera);
+      if (_v.z > 1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) continue;
+      st._d = d; near.push(st);
+    }
+    near.sort((a, b) => a._d - b._d);
+    for (let i = 0; i < chips.length; i++) {
+      const ch = chips[i], st = i < near.length ? near[i] : null;
+      ch.st = st;
+      if (!st) { if (ch.html) { ch.html = ''; ch.el.style.display = 'none'; } continue; }
+      const html = '<b>' + st.name + '</b><br><span class="sub">' +
+        (st.on ? st.bikes + ' bikes' + (st.ebikes ? ' (' + st.ebikes + ' e)' : '') + ' · ' + st.docks + ' docks' : 'offline') + '</span>';
+      if (html !== ch.html) { ch.html = html; ch.el.innerHTML = html; ch.el.style.display = 'block'; }
+    }
+  }
+  // ---- frame ----
+  function update(t, dt) {
+    if (!polling && t >= poll) doPoll();
+    if (!ST.length) return;
+    // stations: distance-adaptive scale + live fill height
+    let dirty = false;
+    for (const st of ST) {
+      const k = 1.1 * clamp(_v.set(st.x, 6, st.z).distanceTo(camera.position) / 1900, 1, 4);
+      _s.set(k, k * st.h, k);
+      _q.identity();
+      _m.compose(_v.set(st.x, 1.6, st.z), _q, _s);
+      stMesh.setMatrixAt(st.slot, _m);
+      dirty = true;
+    }
+    if (dirty) stMesh.instanceMatrix.needsUpdate = true;
+    // pulses
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      const p = pulses[i];
+      p.t += dt;
+      const a = p.t / 1.4;
+      if (a >= 1) { pSize[p.i] = 0; pulses.splice(i, 1); continue; }
+      pSize[p.i] = 26 * Math.sin(Math.min(1, a * 1.4) * Math.PI);
+      pPos[p.i * 3 + 1] = 10 + a * 26;
+    }
+    pGeo.attributes.aSize.needsUpdate = true;
+    pGeo.attributes.position.needsUpdate = true;
+    // simulated riders
+    if (spawnQ.length && rSlots.length && Math.random() < dt * 4) spawnRider(...spawnQ.shift());
+    for (let i = riders.length - 1; i >= 0; i--) {
+      const r = riders[i];
+      r.s += r.sp * dt;
+      if (r.s >= r.len) {
+        pulse(r.dst.x, r.dst.z, 1);
+        rMesh.setMatrixAt(r.slot, _zero); rSlots.push(r.slot);
+        riders.splice(i, 1);
+        continue;
+      }
+      while (r.seg < r.cum.length - 2 && r.s > r.cum[r.seg + 1]) r.seg++;
+      const a = r.pts[r.seg], b = r.pts[r.seg + 1];
+      const segl = r.cum[r.seg + 1] - r.cum[r.seg] || 1;
+      const f = (r.s - r.cum[r.seg]) / segl;
+      const x = a[0] + (b[0] - a[0]) * f, z = a[1] + (b[1] - a[1]) * f;
+      const k = 1.4 * clamp(Math.hypot(x - camera.position.x, z - camera.position.z) / 1500, 1, 4);
+      _q.setFromAxisAngle(_up, Math.atan2(b[0] - a[0], b[1] - a[1]));
+      _s.setScalar(k);
+      _m.compose(_v.set(x, 1.9, z), _q, _s);
+      rMesh.setMatrixAt(r.slot, _m);
+    }
+    rMesh.instanceMatrix.needsUpdate = true;
+    // chips
+    if (t > chipT) { chipT = t + 0.6; assignChips(); }
+    for (const ch of chips) {
+      if (!ch.st) continue;
+      _v.set(ch.st.x, 14, ch.st.z).project(camera);
+      const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * innerHeight;
+      ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
+    }
+  }
+  return { update, stations: ST, riders, _pulse: pulse };
+})();
+window.__citibike = citibike; // dev/testing hook
+
+/* ============================================================
    26c. URL-hash scene driver (testing / deep links)
    #cam=x,y,z & tgt=x,y,z & mode=live|golden|noon|dusk & q=high
    & faketime=<unix_ms> & fakeweather=<json> & snap & dbg
@@ -6010,6 +6274,7 @@ function frame() {
   subway.update(T, dt);
   ferries.update(T, dt);
   buses.update(T, dt);
+  citibike.update(T, dt);
   cells.tick(T, dt, _focus, camY);
   steam.tick(_focus, camY);
   flags.tick(dt, _focus, camY);
