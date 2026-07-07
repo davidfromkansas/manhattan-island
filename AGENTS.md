@@ -38,6 +38,7 @@ city state; a timeline slider scrubs the city back through the last 7 days.
 | `public/streets.json` | Real street graph: 86,471 CSCL edges + 57,450 nodes (see schema below) |
 | `public/blocks.json` | 27,257 real city-block faces |
 | `public/buildings.json` | 304,911 real building footprint boxes (BIN ids) |
+| `public/boundaries.json` | 5 borough + 262 real 2020-NTA neighborhood polygons (lon/lat rings; client converts via `subway.geoRaw`). Powers agent region context + boundary layers. |
 
 ## Run + test locally
 

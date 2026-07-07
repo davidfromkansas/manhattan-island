@@ -37,6 +37,40 @@ everything else; releasing the focus never discards the agent context.
 
 ---
 
+## 🗺️ Borough & neighborhood boundaries
+
+**Shipped:** July 7, 2026
+
+**TL;DR:** The whole simulation now knows its 5 boroughs and 262 real NYC
+neighborhoods. The City Concierge can outline any of them on the map and tell you
+which one you're looking at.
+
+**What you'll see:**
+- "Outline the Bronx" or "show me the border of Williamsburg" draws the real region
+  boundary — a bright outline with a faint colored wash filling the area and the
+  region's name labeled at its center — then frames it (staying under the cloud deck
+  so a whole borough is still visible). The "✕ layer" chip clears it.
+- "What neighborhood am I looking at?" answers from where the camera is pointed
+  ("Midtown-Times Square, Manhattan"); "what neighborhood is the Brooklyn Bridge in?"
+  works for any place. Names fuzzy-match, so "Times Square" or "Upper East Side"
+  resolve to their full NTA names.
+- The concierge now has borough + neighborhood context on every question, so answers
+  can be more place-aware.
+
+**How it works:** boundaries come from NYC City Planning's official
+[Borough Boundaries](https://data.cityofnewyork.us/City-Government/Borough-Boundaries/gthc-hcne)
+and [2020 Neighborhood Tabulation Areas](https://data.cityofnewyork.us/City-Government/2020-Neighborhood-Tabulation-Areas-NTAs-/9nt8-h7nd)
+(NTAs — the city's standard neighborhood geography, aggregated from 2020 census
+tracts), simplified and baked to `public/boundaries.json` as lon/lat rings. The
+client projects them into the scene through the same frozen calibration every live
+entity uses, so a boundary lands where the streets and buildings are. The agent
+reasons about regions with point-in-polygon tests; NTA neighborhoods include a few
+named parks/airports/cemeteries (e.g. Central Park, JFK) alongside residential areas.
+Boundaries follow real administrative lines and are simplified for display, so they
+trace the neighborhood, not every zigzag of the shoreline.
+
+---
+
 ## ✦ City Concierge — a spatial-intelligence agent for the twin
 
 **Shipped:** July 7, 2026

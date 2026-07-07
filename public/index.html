@@ -7480,6 +7480,29 @@ const concierge = (() => {
             m.frustumCulled = false; group.add(m); meshes.push(m);
           }
         }
+        for (const reg of (ly.regions || [])) { // borough/neighborhood: [lon,lat] rings → scene via geoRaw
+          let cxs = 0, czs = 0, cn = 0;
+          for (const ring of reg.rings || []) {
+            const pts = ring.map(([lon, lat]) => subway.geoRaw(lat, lon));
+            if (pts.length < 3) continue;
+            // faint filled wash so the region reads as an area (earcut-triangulated Shape)
+            const shape = new THREE.Shape(pts.map(g => new THREE.Vector2(g.x, g.z)));
+            const fg = new THREE.ShapeGeometry(shape);
+            const fp = fg.attributes.position; // Shape lies in XY → remap to ground XZ at y=8
+            for (let i = 0; i < fp.count; i++) fp.setXYZ(i, fp.getX(i), 8, fp.getY(i));
+            const fm = new THREE.Mesh(fg, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.09, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
+            fm.renderOrder = 11; fm.frustumCulled = false; group.add(fm); meshes.push(fm);
+            // bright outline on top
+            const pos = new Float32Array(pts.length * 3);
+            pts.forEach((g, i) => { pos[i * 3] = g.x; pos[i * 3 + 1] = 10; pos[i * 3 + 2] = g.z;
+              allXZ.push({ x: g.x, z: g.z }); cxs += g.x; czs += g.z; cn++; });
+            const ge = new THREE.BufferGeometry();
+            ge.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            const m = new THREE.LineLoop(ge, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 1, depthTest: false }));
+            m.renderOrder = 13; m.frustumCulled = false; group.add(m); meshes.push(m);
+          }
+          if (cn && reg.name && labelPool.length < 10) labelPool.push({ x: cxs / cn, z: czs / cn, label: reg.name });
+        }
       }
       for (let i = 0; i < lbl.length; i++) {
         const o = labelPool[i] || null; lbl[i].o = o;
@@ -7491,7 +7514,8 @@ const concierge = (() => {
         let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
         for (const q of allXZ) { if (q.x < x0) x0 = q.x; if (q.x > x1) x1 = q.x; if (q.z < z0) z0 = q.z; if (q.z > z1) z1 = q.z; }
         const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-        const alt = clamp(Math.max(x1 - x0, z1 - z0, 500) * 0.95 + 260, 420, 15000);
+        // cap under the 5200 m cloud deck so large regions (a whole borough) stay visible, not fogged
+        const alt = clamp(Math.max(x1 - x0, z1 - z0, 500) * 0.95 + 260, 420, 4800);
         camTween = { p0: camera.position.clone(), t0: controls.target.clone(),
           p1: new THREE.Vector3(cx, alt, cz - alt * 1.05), t1: new THREE.Vector3(cx, 0, cz), t: 0, dur: 2.4 };
       }
@@ -7579,13 +7603,41 @@ const concierge = (() => {
   function applyTimeline(t) {
     if (t && isFinite(t.scrub_min)) timeline.set(clamp(Math.round(t.scrub_min), -10080, 0));
   }
+  /* --- region index: which neighborhood/borough a scene point is in (for viewer
+         context). boundaries.json [lon,lat] rings converted to scene once via
+         geoRaw; best-effort — if the fetch fails, context just omits the region. --- */
+  const regionIndex = (() => {
+    let neigh = [];
+    fetch('/boundaries.json').then(r => r.ok ? r.json() : null).then(d => {
+      if (!d) return;
+      neigh = d.neighborhoods.map(n => {
+        const rings = (n.rings || []).map(ring => ring.map(([lon, lat]) => { const g = subway.geoRaw(lat, lon); return [g.x, g.z]; }));
+        let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+        for (const rg of rings) for (const [x, z] of rg) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+        return { name: n.name, boro: n.boro, rings, bb: [x0, x1, z0, z1] };
+      });
+    }).catch(() => {});
+    const inRing = (x, z, ring) => { let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i][0], zi = ring[i][1], xj = ring[j][0], zj = ring[j][1];
+        if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / ((zj - zi) || 1e-9) + xi)) inside = !inside;
+      } return inside; };
+    return { at(x, z) {
+      for (const n of neigh) { const b = n.bb;
+        if (x < b[0] || x > b[1] || z < b[2] || z > b[3]) continue;
+        if (n.rings.some(rg => inRing(x, z, rg))) return { neighborhood: n.name, borough: n.boro };
+      } return null;
+    } };
+  })();
   function viewerContext() {
     const t = controls.target;
     let street = '', borough = '';
     const ms = matchStreet(t.x, t.z, 400);
     if (ms) { const e = G_EDGES[ms.ei]; street = e.nm; borough = BORO_N[e.bo] || ''; }
+    const reg = regionIndex.at(t.x, t.z);
     const ctx = { sx: Math.round(t.x), sz: Math.round(t.z), alt_m: Math.round(camera.position.y),
-      street, borough, scrub_min: Math.round(+document.getElementById('timeSlider').value) };
+      street, borough: (reg && reg.borough) || borough, neighborhood: reg ? reg.neighborhood : '',
+      scrub_min: Math.round(+document.getElementById('timeSlider').value) };
     if (FOCUS.at && Date.now() - FOCUS.at < 900_000) { // clicked within the last 15 min
       ctx.focus_kind = FOCUS.kind; ctx.focus_label = FOCUS.label;
       ctx.focus_age_s = Math.round((Date.now() - FOCUS.at) / 1000); ctx.focus_data = FOCUS.data;
@@ -7623,6 +7675,7 @@ const concierge = (() => {
     ['Spatial search + rankings', ['5 slowest roads in Brooklyn right now, on the map', 'Citi Bike docks with e-bikes within 400 m of Broadway & W 45 St', 'Which traffic cameras watch the FDR?']],
     ['Buffers + coverage', ['How many bike docks within 300 m of each East River ferry? Draw the buffers', 'Ring every road closure with a 250 m buffer']],
     ['Buildings + streets', ['How many buildings over 150 m tall are in the city?', 'Map the tallest buildings near Wall St & Broad St', 'Where do Broadway and W 4 St cross?']],
+    ['Boroughs + neighborhoods', ['Outline the Bronx', 'Show me the border of Williamsburg', 'What neighborhood am I looking at?']],
     ['Time travel', ['Show me the city as it was 3 days ago', 'What was the weather yesterday?', 'Back to live']]
   ];
   for (const [h, items] of USES) {
