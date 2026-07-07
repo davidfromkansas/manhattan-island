@@ -63,7 +63,7 @@ const frame = {
   // BirdCast (Cornell Lab) radar migration over Manhattan
   birds: birds && typeof birds.aloft === 'number' ? { aloft: birds.aloft, dirDeg: birds.dirDeg,
     speedMs: birds.speedMs, hMeanM: birds.hMeanM, hMaxM: birds.hMaxM, night: !!birds.night, t: birds.t,
-    passed: birds.passed ?? 0, pct: birds.pct ?? null, boroughs: birds.boroughs ?? null } : null,
+    passed: birds.passed ?? 0, pct: birds.pct ?? null, enabled: birds.enabled ?? null, boroughs: birds.boroughs ?? null } : null,
   // traffic records readings only — link geometry is re-fetched live at replay time
   traffic: (traffic?.links ?? []).map(l => [l.id, l.speed, l.tt]),
   trafficEvents: (trafficEvents?.events ?? []).map(e => [e.id, e.kind, e.sev,

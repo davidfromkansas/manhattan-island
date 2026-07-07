@@ -137,6 +137,8 @@
   .fybl.bus b { color:#ffc450; }
   .fybl.bike { border-color:rgba(80,214,255,.4); }
   .fybl.bike b { color:#4fd6ff; }
+  .fybl.birdf { border-color:rgba(150,200,255,.35); } /* flock chips: radar-sky accent */
+  .fybl.birdf b { color:#a8d4ff; }
   .fybl.traffic { border-color:rgba(255,130,95,.4); } /* traffic chips: incident ember accent */
   .fybl.traffic b { color:#ff8a66; }
   .flbl b { color:#fff; font-weight:600; }
@@ -6570,6 +6572,7 @@ const birds = (() => {
   }
   let D = null, N = 0, hd = 0, sizeK = 4.8, farK = 6;
   const BD = {}; // per-borough flight params derived from that county's radar row
+  const NB = { mn: 0, bk: 0, qn: 0, bx: 0 }; // rendered birds per borough (chips explain the ratio)
   const yFor = (b) => { // altitude band from the borough's mean/max radar heights (compressed)
     const p = BD[b.bo] || BD.mn;
     return Math.min(p.ym * (0.55 + b.yr * 0.9), p.yx);
@@ -6601,6 +6604,7 @@ const birds = (() => {
     const tot = Object.values(BD).reduce((s, p) => s + p.aloft, 0);
     const quota = {};
     for (const k of Object.keys(BOXES)) quota[k] = tot > 0 ? (N * BD[k].aloft) / tot : (k === 'mn' ? N : 0);
+    for (const k of Object.keys(NB)) NB[k] = 0;
     for (const g of GROUPS) {
       if (g.start >= N) break;
       let best = 'mn';
@@ -6611,6 +6615,7 @@ const birds = (() => {
         const b = B[j];
         if (b.bo !== best) { b.bo = best; b.x = bx_.x0 + RB() * (bx_.x1 - bx_.x0); b.z = bx_.z0 + RB() * (bx_.z1 - bx_.z0); }
         b.y = yFor(b);
+        if (j < N) NB[best]++;
       }
     }
     if (N < mesh.count) for (let i = N; i < mesh.count; i++) mesh.setMatrixAt(i, _bdZero);
@@ -6631,6 +6636,61 @@ const birds = (() => {
     if (d === null) { poll = 0; delay = 120; return; } // back to live
     setData(d);
   }
+  // ---- flock chips: what a rendered flock MEANS (pool of 3, bus-style) ----
+  // A flock is a VISUALIZATION of one radar measurement, not tracked individuals.
+  // Each chip states the county's radar estimate, its heading/speed/altitude, how
+  // many real birds one rendered bird stands for, and BirdCast's own low-confidence
+  // flag when the reading is daytime/off-season (enabled=false in the source).
+  const BONAMES = { mn: 'Manhattan', bk: 'Brooklyn', qn: 'Queens', bx: 'Bronx' };
+  const COMP8 = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const bfChips = [];
+  for (let i = 0; i < 3; i++) {
+    const el = document.createElement('div');
+    el.className = 'fybl birdf';
+    document.body.appendChild(el);
+    bfChips.push({ el, b: null, html: '' });
+  }
+  function chipHTML(b) {
+    const bos = (D && D.boroughs) || { mn: D };
+    const s = bos[b.bo] || bos.mn || D || {};
+    const mph = Math.round((s.speedMs || 0) * 2.237);
+    const comp = COMP8[Math.round((s.dirDeg || 0) / 45) % 8];
+    const ratio = NB[b.bo] > 0 ? Math.max(1, Math.round((s.aloft || 0) / NB[b.bo])) : 1;
+    const lowConf = s.enabled === false || (s.enabled === undefined && D && D.enabled === false);
+    return '<b>Migration radar · ' + (BONAMES[b.bo] || 'NYC') + '</b><br><span class="sub">' +
+      '≈' + Math.round(s.aloft || 0).toLocaleString('en-US') + ' birds aloft (radar est.) · ' + comp + ' ' + mph + ' mph · ~' +
+      Math.round(s.hMeanM || 0) + ' m up · 1 shown ≈ ' + ratio + ' aloft' +
+      (lowConf ? ' · daytime — low confidence' : '') + '</span>';
+  }
+  const _bcV = new THREE.Vector3();
+  let bfChipT = 0;
+  function assignFlockChips() {
+    const near = [];
+    for (let i = 0; i < N; i++) {
+      const b = B[i];
+      if (b.ldr >= 0) continue; // skein leaders + singles carry the chips
+      const d = _bcV.set(b.x, b.y, b.z).distanceTo(camera.position);
+      if (d >= 9000) continue;
+      _bcV.set(b.x, b.y, b.z).project(camera);
+      if (_bcV.z > 1 || _bcV.x < -1 || _bcV.x > 1 || _bcV.y < -1 || _bcV.y > 1) continue;
+      b._d = d; near.push(b);
+    }
+    near.sort((a, c) => a._d - c._d);
+    const used = new Set(); // one chip per borough — three copies of one number help nobody
+    const pick = [];
+    for (const b of near) {
+      if (used.has(b.bo)) continue;
+      used.add(b.bo); pick.push(b);
+      if (pick.length >= bfChips.length) break;
+    }
+    for (let i = 0; i < bfChips.length; i++) {
+      const ch = bfChips[i], b = i < pick.length ? pick[i] : null;
+      ch.b = b;
+      if (!b) { if (ch.html) { ch.html = ''; ch.el.style.display = 'none'; } continue; }
+      const html = chipHTML(b);
+      if (html !== ch.html) { ch.html = html; ch.el.innerHTML = html; ch.el.style.display = 'block'; } // .fybl base CSS is display:none
+    }
+  }
   const _bdM = new THREE.Matrix4(), _bdQ = new THREE.Quaternion(), _bdS = new THREE.Vector3(),
         _bdV = new THREE.Vector3(), _bdE = new THREE.Euler(0, 0, 0, 'YXZ'),
         _bdZero = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -6642,7 +6702,10 @@ const birds = (() => {
   }
   function update(t, dt) {
     if (!polling && t >= poll && !HIST.active) doPoll();
-    if (!N) return;
+    if (!N) {
+      for (const ch of bfChips) if (ch.html) { ch.html = ''; ch.el.style.display = 'none'; ch.b = null; }
+      return;
+    }
     const kFollow = 1 - Math.exp(-dt * 2.5);
     for (let i = 0; i < N; i++) {
       const b = B[i];
@@ -6676,6 +6739,14 @@ const birds = (() => {
       mesh.setMatrixAt(i, _bdM);
     }
     mesh.instanceMatrix.needsUpdate = true;
+    bfChipT += dt;
+    if (bfChipT >= 0.7) { bfChipT = 0; assignFlockChips(); }
+    for (const ch of bfChips) {
+      if (!ch.b) continue;
+      _bcV.set(ch.b.x, ch.b.y + 16, ch.b.z).project(camera);
+      const sx = (0.5 - _bcV.x * 0.5) * innerWidth, sy = (-_bcV.y * 0.5 + 0.5) * innerHeight; // x mirrored with the canvas
+      ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
+    }
   }
   // "Birds" preset: aim into the migration stream — centroid of the mid-island
   // slice of the flock (rim outliers skew the average), camera trailing it so
