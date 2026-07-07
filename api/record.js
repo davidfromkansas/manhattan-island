@@ -36,9 +36,10 @@ module.exports = async (req, res) => {
       try { const r = await fetch(base + p, { signal: AbortSignal.timeout(45000) }); return r.ok ? r.json() : null; }
       catch { return null; }
     };
-    const [buses, bikes, ferries, flights, weather, subway] = await Promise.all([
+    const [buses, bikes, ferries, flights, weather, subway, traffic, trafficEvents] = await Promise.all([
       get('/api/buses'), get('/api/citibike'), get('/api/ferries'),
-      get('/api/flights'), get('/api/weather'), get('/api/subway')
+      get('/api/flights'), get('/api/weather'), get('/api/subway'),
+      get('/api/traffic'), get('/api/traffic-events')
     ]);
     const r5 = (v) => Math.round(v * 1e5) / 1e5;
     const now = new Date();
@@ -54,11 +55,18 @@ module.exports = async (req, res) => {
       flights: (flights?.ac ?? []).map(a => [a.hex, a.cs, r5(a.lat), r5(a.lon),
         Math.round(a.altM), Math.round(a.gsMs), Math.round(a.track)]),
       subway: subway ? { trips: subway.trips, vehStatus: subway.vehStatus } : null,
+      // traffic records readings only — link geometry is re-fetched live at replay
+      // time (same pattern as bike stations: the substrate churns far slower than the data)
+      traffic: (traffic?.links ?? []).map(l => [l.id, l.speed, l.tt]),
+      trafficEvents: (trafficEvents?.events ?? []).map(e => [e.id, e.kind, e.sev,
+        e.road || '', e.dir || '', r5(e.lat), r5(e.lon), e.desc || '']),
       schema: {
         buses: 'id,route,lat,lon,bearing,speedMs,dest',
         bikes: 'stationId,bikes,ebikes,docks,on',
         ferries: 'id,label,lat,lon,heading,speedMs,route,headsign,docked',
-        flights: 'hex,callsign,lat,lon,altM,gsMs,track'
+        flights: 'hex,callsign,lat,lon,altM,gsMs,track',
+        traffic: 'linkId,speedMph,travelTimeS',
+        trafficEvents: 'id,kind,severity,road,direction,lat,lon,desc'
       }
     };
 
@@ -95,7 +103,8 @@ module.exports = async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ ok: true, day, counts: {
       buses: frame.buses.length, bikes: frame.bikes.length, ferries: frame.ferries.length,
-      flights: frame.flights.length, subwayTrips: frame.subway ? frame.subway.trips.length : 0 }, kept }));
+      flights: frame.flights.length, subwayTrips: frame.subway ? frame.subway.trips.length : 0,
+      traffic: frame.traffic.length, trafficEvents: frame.trafficEvents.length }, kept }));
   } catch (e) {
     console.error('[record]', e.message || e);
     res.statusCode = 500;

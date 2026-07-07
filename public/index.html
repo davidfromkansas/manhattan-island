@@ -137,6 +137,8 @@
   .fybl.bus b { color:#ffc450; }
   .fybl.bike { border-color:rgba(80,214,255,.4); }
   .fybl.bike b { color:#4fd6ff; }
+  .fybl.traffic { border-color:rgba(255,130,95,.4); } /* traffic chips: incident ember accent */
+  .fybl.traffic b { color:#ff8a66; }
   .flbl b { color:#fff; font-weight:600; }
   .flbl .sub { color:rgba(255,255,255,.55); }
   body.photo .flbl { display:none !important; }
@@ -4601,12 +4603,14 @@ const timeline = (() => {
     if (frame.weather) live.applyWeather(frame.weather);
     flights.hist(frame.flights || []); ferries.hist(frame.ferries || []);
     buses.hist(frame.buses || []); subway.hist(frame.subway); citibike.hist(frame.bikes || []);
+    rtraffic.hist(frame.traffic || [], frame.trafficEvents || []);
     setBadge('past', LBL_FMT.format(new Date(midday(day))));
   }
   function exit() {
     if (!HIST.active) return;
     HIST.active = false; HIST.day = '';
     flights.hist(null); ferries.hist(null); buses.hist(null); subway.hist(null); citibike.hist(null);
+    rtraffic.hist(null);
     if (HIST.liveWx) live.applyWeather(HIST.liveWx);
   }
   async function apply(off) {
@@ -6396,6 +6400,273 @@ const citibike = (() => {
 window.__citibike = citibike; // dev/testing hook
 
 /* ============================================================
+   25g. LIVE TRAFFIC — real NYC DOT sensor speeds painted onto
+   the roads they measure, + 511NY incidents/closures as markers.
+   /api/traffic (60 s): each sensor link becomes a ribbon riding
+   its road, colored green→amber→red by measured mph. Points are
+   graph-snapped (heading-aware), ride the bespoke elevated decks
+   (FDR viaduct, WSH, bridge lanes) where those exist, and GAP
+   through tunnels / open water — nothing paints the river.
+   /api/traffic-events (4 min): one tinted Points layer, red =
+   incident, amber = closure; water-borne fixes with no road are
+   dropped. Pooled chips (bus-pattern) surface road name + live
+   mph / event descriptions. +2 draw calls total.
+   ============================================================ */
+const rtraffic = (() => {
+  // --- elevated decks the sensor roads ride (built once from the bespoke routes) ---
+  const ELEV = [];
+  {
+    const add = (arr) => { for (let i = 0; i < arr.length - 1; i++)
+      ELEV.push([arr[i].x, arr[i].y, arr[i].z, arr[i + 1].x, arr[i + 1].y, arr[i + 1].z]); };
+    add(WSH_PTS); add(FDR_PTS);
+    for (const bp of BRIDGE_ROUTES) add(bp);
+  }
+  function elevAt(x, z, maxD = 42) { // nearest bespoke-deck height, or null
+    let y = null, bd = maxD * maxD;
+    for (const s of ELEV) {
+      const dx = s[3] - s[0], dz = s[5] - s[2], L2 = dx * dx + dz * dz || 1;
+      const t = clamp(((x - s[0]) * dx + (z - s[2]) * dz) / L2, 0, 1);
+      const px = s[0] + dx * t, pz = s[2] + dz * t;
+      const d2 = (x - px) * (x - px) + (z - pz) * (z - pz);
+      if (d2 < bd) { bd = d2; y = s[1] + (s[4] - s[1]) * t; }
+    }
+    return y;
+  }
+  /* --- speed ribbons: one Mesh, rebuilt on each 60 s ingest (~60 links, trivial) --- */
+  const LINKS = []; // { id, name, speed, tt, pts: [[x,y,z]|null…], mid }
+  const RIB_W = 9;
+  let histSpd = null; // Map(linkId → [mph, ttS]) while the timeline is scrubbed
+  let ribbons = null;
+  const ribbonMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide,
+    transparent: true, opacity: 0.85, depthWrite: false });
+  const _rc = new THREE.Color();
+  function spdColor(mph, c) { // arterial-highway scale: green ≥ 48 · amber ≈ 31 · red ≤ 14
+    const t = clamp((mph - 14) / 34, 0, 1);
+    if (t < 0.5) c.setRGB(0.93, 0.13 + t * 1.2, 0.11);
+    else c.setRGB(0.93 - (t - 0.5) * 1.54, 0.73, 0.11 + (t - 0.5) * 0.4);
+    return c.convertSRGBToLinear(); // authored in sRGB; vertex colors feed the linear pipeline
+  }
+  function rebuildRibbons() {
+    const P = [], C = [];
+    for (const L of LINKS) {
+      const rec = histSpd ? histSpd.get(L.id) : null;
+      const mph = histSpd ? (rec ? rec[0] : null) : L.speed;
+      if (mph == null) continue; // sensor absent from this day's recording: hide, don't lie
+      spdColor(mph, _rc);
+      for (let i = 0; i < L.pts.length - 1; i++) {
+        const a = L.pts[i], b = L.pts[i + 1];
+        if (!a || !b) continue; // gap (tunnel / water)
+        const dx = b[0] - a[0], dz = b[2] - a[2], l = Math.hypot(dx, dz) || 1;
+        const nx = -dz / l * RIB_W / 2, nz = dx / l * RIB_W / 2;
+        P.push(a[0] - nx, a[1], a[2] - nz, a[0] + nx, a[1], a[2] + nz, b[0] - nx, b[1], b[2] - nz,
+               a[0] + nx, a[1], a[2] + nz, b[0] + nx, b[1], b[2] + nz, b[0] - nx, b[1], b[2] - nz);
+        for (let k = 0; k < 6; k++) C.push(_rc.r, _rc.g, _rc.b);
+      }
+    }
+    if (ribbons) { scene.remove(ribbons); ribbons.geometry.dispose(); ribbons = null; }
+    if (!P.length) return;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(P), 3));
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(C), 3));
+    ribbons = new THREE.Mesh(g, ribbonMat);
+    ribbons.frustumCulled = false; ribbons.renderOrder = 3; ribbons.matrixAutoUpdate = false;
+    scene.add(ribbons);
+  }
+  function ingestLinks(list) {
+    LINKS.length = 0;
+    for (const l of list) {
+      const raw = l.pts.map(p => subway.geoRaw(p[0], p[1]));
+      const pts = [];
+      for (let i = 0; i < raw.length; i++) {
+        const j = Math.min(i, raw.length - 2);
+        const ang = Math.atan2(raw[j + 1].z - raw[j].z, raw[j + 1].x - raw[j].x); // matchStreet's atan2(dz,dx) convention
+        const m = matchStreet(raw[i].x, raw[i].z, 70, ang);
+        if (m && G_EDGES[m.ei].rw === 4) { pts.push(null); continue; } // tunnel: never paint the river
+        const x = m ? m.x : raw[i].x, z = m ? m.z : raw[i].z;
+        const ey = elevAt(x, z);
+        if (ey !== null) pts.push([x, ey + 0.45, z]);                  // FDR viaduct / WSH / bridge lanes
+        else if (m && G_EDGES[m.ei].rw === 2) pts.push([x, 46, z]);    // bridge deck without a bespoke route (cams' constant)
+        else if (!onLand(x, z) && !landOK(x, z)) pts.push(null);       // off-graph over water: gap
+        else pts.push([x, onLand(x, z) ? LAND_Y + 0.35 : 1.75, z]);    // road surface, just under the cars
+      }
+      const valid = pts.filter(p => p);
+      if (valid.length < 2) continue;
+      LINKS.push({ id: String(l.id), name: l.name, speed: l.speed, tt: l.tt,
+        pts, mid: valid[valid.length >> 1] });
+    }
+    rebuildRibbons();
+    if (LINKS.length) console.log('[traffic]', LINKS.length, 'DOT sensor links painted');
+  }
+  /* --- 511NY events: one tinted Points layer (cams-pattern glyph) --- */
+  const EVMAX = 400;
+  const EV = []; // { x, y, z, kind, sev, road, dir, desc }
+  const liveEvents = []; // last live set, restored on scrub-exit
+  const evPos = new Float32Array(EVMAX * 3), evCol = new Float32Array(EVMAX * 3);
+  for (let i = 1; i < evPos.length; i += 3) evPos[i] = -1e4; // parked out of sight
+  const evGeo = new THREE.BufferGeometry();
+  evGeo.setAttribute('position', new THREE.BufferAttribute(evPos, 3));
+  evGeo.setAttribute('color', new THREE.BufferAttribute(evCol, 3));
+  const evTex = (() => { // white warning triangle + dark "!" — white body takes the per-point tint
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d');
+    g.beginPath(); g.moveTo(32, 5); g.lineTo(60, 55); g.lineTo(4, 55); g.closePath();
+    g.fillStyle = '#fff'; g.fill();
+    g.fillStyle = 'rgba(15,18,26,0.92)';
+    g.beginPath(); g.roundRect(29, 21, 6, 18, 2); g.fill();
+    g.beginPath(); g.roundRect(29, 44, 6, 6, 2); g.fill();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  })();
+  const evMat = new THREE.ShaderMaterial({
+    uniforms: { uMap: { value: evTex }, uDpr: { value: renderer.getPixelRatio() } },
+    transparent: true, depthTest: false, depthWrite: false, vertexColors: true,
+    vertexShader: `uniform float uDpr; varying vec3 vC;
+      void main() {
+        vC = color;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = clamp(19000.0 / -mv.z, 7.0, 30.0) * uDpr;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform sampler2D uMap; varying vec3 vC;
+      void main() {
+        // pre-flip x: the presentation mirror (scaleX(-1)) flips point sprites back
+        vec4 c = texture2D(uMap, vec2(1.0 - gl_PointCoord.x, gl_PointCoord.y));
+        if (c.a < 0.08) discard;
+        gl_FragColor = vec4(c.rgb * vC, c.a);
+      }`
+  });
+  const evMesh = new THREE.Points(evGeo, evMat);
+  evMesh.frustumCulled = false; evMesh.renderOrder = 6; evMesh.matrixAutoUpdate = false;
+  scene.add(evMesh);
+  function ingestEvents(list) {
+    EV.length = 0;
+    for (const e of list) {
+      if (EV.length >= EVMAX) break;
+      const g = subway.geoRaw(e.lat, e.lon);
+      const m = matchStreet(g.x, g.z, 90);
+      const x = m ? m.x : g.x, z = m ? m.z : g.z;
+      const ey = elevAt(x, z);
+      let y;
+      if (ey !== null) y = ey + 13;
+      else if (m && G_EDGES[m.ei].rw === 2) y = 58;
+      else if (!onLand(x, z) && !landOK(x, z)) continue; // water fix, no road: drop
+      else y = 14;
+      EV.push({ x, y, z, kind: e.kind, sev: e.sev, road: e.road, dir: e.dir, desc: e.desc });
+    }
+    for (let i = 0; i < EVMAX; i++) {
+      if (i < EV.length) {
+        evPos[i * 3] = EV[i].x; evPos[i * 3 + 1] = EV[i].y; evPos[i * 3 + 2] = EV[i].z;
+        if (EV[i].kind === 'incident') { evCol[i * 3] = 1.0; evCol[i * 3 + 1] = 0.32; evCol[i * 3 + 2] = 0.26; }
+        else { evCol[i * 3] = 1.0; evCol[i * 3 + 1] = 0.72; evCol[i * 3 + 2] = 0.22; }
+      } else evPos[i * 3 + 1] = -1e4;
+    }
+    evGeo.attributes.position.needsUpdate = true;
+    evGeo.attributes.color.needsUpdate = true;
+  }
+  /* --- polling (both gated on !HIST.active in update) --- */
+  let tPoll = 6, tDelay = 60, tBusy = false;
+  let ePoll = 8, eDelay = 240, eBusy = false;
+  function pollLinks() {
+    tBusy = true;
+    fetch('/api/traffic').then(r => { if (!r.ok) throw 0; return r.json(); })
+      .then(j => {
+        if (!Array.isArray(j.links)) throw 0;
+        if (j.links.length) { ingestLinks(j.links); tDelay = 60; } // scrub-safe: rebuild reads histSpd
+        else tDelay = Math.min(tDelay * 2, 480); // upstream outage: server serves empty
+      })
+      .catch(() => { tDelay = Math.min(tDelay * 2, 480); })
+      .finally(() => { tBusy = false; tPoll = T + tDelay; });
+  }
+  function pollEvents() {
+    eBusy = true;
+    fetch('/api/traffic-events').then(r => { if (!r.ok) throw 0; return r.json(); })
+      .then(j => {
+        if (!Array.isArray(j.events)) throw 0;
+        liveEvents.length = 0; liveEvents.push(...j.events);
+        if (!HIST.active) ingestEvents(liveEvents); // a poll landing mid-scrub must not stomp the replay
+        eDelay = 240;
+      })
+      .catch(() => { eDelay = Math.min(eDelay * 2, 960); })
+      .finally(() => { eBusy = false; ePoll = T + eDelay; });
+  }
+  /* --- chips (pool of 4, shared by links + events; events outrank) --- */
+  const chips = [];
+  for (let i = 0; i < 4; i++) {
+    const el = document.createElement('div');
+    el.className = 'fybl traffic';
+    document.body.appendChild(el);
+    chips.push({ el, o: null, html: '' });
+  }
+  const _v = new THREE.Vector3();
+  const near = [];
+  const title = (s) => s.toLowerCase().replace(/\b[a-z]/g, ch => ch.toUpperCase());
+  function assignChips() {
+    near.length = 0;
+    for (const L of LINKS) {
+      const rec = histSpd ? histSpd.get(L.id) : null;
+      const mph = histSpd ? (rec ? rec[0] : null) : L.speed;
+      if (mph == null) continue;
+      const tt = histSpd ? rec[1] : L.tt;
+      const d = _v.set(L.mid[0], L.mid[1], L.mid[2]).distanceTo(camera.position);
+      if (d >= 5200) continue;
+      _v.set(L.mid[0], L.mid[1] + 6, L.mid[2]).project(camera);
+      if (_v.z > 1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) continue;
+      near.push({ d, x: L.mid[0], y: L.mid[1] + 6, z: L.mid[2],
+        html: '<b>' + title(L.name) + '</b><br><span class="sub">' + Math.round(mph) + ' mph' +
+          (tt > 0 ? ' · ' + Math.max(1, Math.round(tt / 60)) + ' min' : '') + '</span>' });
+    }
+    for (const e of EV) {
+      const d = _v.set(e.x, e.y, e.z).distanceTo(camera.position);
+      if (d >= 5200) continue;
+      _v.set(e.x, e.y + 4, e.z).project(camera);
+      if (_v.z > 1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) continue;
+      const dsc = e.desc && e.desc.length > 64 ? e.desc.slice(0, 63) + '…' : e.desc;
+      near.push({ d: d * 0.7, x: e.x, y: e.y + 4, z: e.z, // events outrank speed chips
+        html: '<b>' + (e.kind === 'incident' ? 'Incident' : 'Closure') +
+          (e.road ? ' · ' + e.road : '') + '</b><br><span class="sub">' + dsc + '</span>' });
+    }
+    near.sort((a, b) => a.d - b.d);
+    for (let i = 0; i < chips.length; i++) {
+      const ch = chips[i], o = i < near.length ? near[i] : null;
+      ch.o = o;
+      if (!o) { if (ch.html) { ch.html = ''; ch.el.style.display = 'none'; } continue; }
+      if (o.html !== ch.html) { ch.html = o.html; ch.el.innerHTML = o.html; ch.el.style.display = 'block'; } // .fybl base CSS is display:none
+    }
+  }
+  let chipT = 0;
+  function update(t, dt) {
+    if (!tBusy && t >= tPoll && !HIST.active) pollLinks();
+    if (!eBusy && t >= ePoll && !HIST.active) pollEvents();
+    if (!LINKS.length && !EV.length) return;
+    if (t > chipT) { chipT = t + 0.6; assignChips(); }
+    for (const ch of chips) { // glue chips to their anchors every frame
+      if (!ch.o) continue;
+      _v.set(ch.o.x, ch.o.y, ch.o.z).project(camera);
+      const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * innerHeight; // x mirrored with the canvas
+      ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
+    }
+  }
+  // history replay: recorded speeds recolor the live-fetched link geometry (the
+  // substrate churns far slower than the readings — bike-station precedent; needs
+  // one live geometry pass first). Events rebuild wholly from the recorded rows.
+  function hist(spdRows, evRows) {
+    if (spdRows === null) { // back to live
+      histSpd = null;
+      rebuildRibbons();
+      ingestEvents(liveEvents);
+      tPoll = 0; ePoll = 0;
+      return;
+    }
+    histSpd = new Map(spdRows.map(r => [String(r[0]), [r[1], r[2]]]));
+    rebuildRibbons();
+    ingestEvents(evRows.map(r => ({ id: r[0], kind: r[1], sev: r[2], road: r[3],
+      dir: r[4], lat: r[5], lon: r[6], desc: r[7] })));
+  }
+  return { update, hist, links: LINKS, events: EV };
+})();
+window.__rtraffic = rtraffic; // dev/testing hook
+
+/* ============================================================
    26c. URL-hash scene driver (testing / deep links)
    #cam=x,y,z & tgt=x,y,z & mode=live|golden|noon|dusk & q=high
    & faketime=<unix_ms> & fakeweather=<json> & snap & dbg
@@ -6476,6 +6747,7 @@ function frame() {
   ferries.update(T, dt);
   buses.update(T, dt);
   citibike.update(T, dt);
+  rtraffic.update(T, dt);
   cells.tick(T, dt, _focus, camY);
   steam.tick(_focus, camY);
   flags.tick(dt, _focus, camY);
