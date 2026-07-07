@@ -61,6 +61,15 @@
     transform:translate(-50%,-50%); pointer-events:none;
   }
   body.touchnav #joy { display:block; }
+  #lockbtn {
+    position:fixed; right:16px; bottom:112px; z-index:30; width:46px; height:46px;
+    border-radius:50%; display:none; font:20px system-ui; line-height:44px; text-align:center;
+    background:rgba(14,18,26,.5); border:1.5px solid rgba(255,255,255,.3); color:#fff;
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); padding:0; cursor:pointer;
+  }
+  body.touchnav #lockbtn { display:block; }
+  body.camlock #lockbtn { background:rgba(232,165,88,.75); border-color:rgba(255,220,160,.8); }
+  body.photo #lockbtn { display:none; }
   body.photo #joy { display:none; }
   #camview { position:fixed; top:14px; left:14px; z-index:40; display:none; font:11px system-ui,-apple-system,sans-serif; }
   #camview .ring {
@@ -181,7 +190,8 @@
   </div>
 </div>
 <div id="hint">drag orbit &middot; scroll to dive &middot; WASD to fly &middot; keys 0&ndash;6 views &middot; L light &middot; P photo</div>
-<div id="flyhint">flying &middot; WASD/arrows move &middot; Space/C up/down &middot; Shift boost &middot; Esc exit</div>
+<div id="flyhint">flying &middot; WASD/arrows move &middot; E/C up/down &middot; Space locks view &middot; Shift boost &middot; Esc exit</div>
+<button id="lockbtn" title="lock view direction">&#128275;</button>
 <div id="joy"><div id="joyK"></div></div>
 <div id="camview"><div class="ring"><img alt="live traffic camera"><div class="live"><i></i>LIVE</div><button class="x" title="close">✕</button></div><div class="name"></div></div>
 <div id="dbg"></div>
@@ -3638,7 +3648,7 @@ setTimeout(() => { ui.hint.style.opacity = '0'; }, 8000);
    ============================================================ */
 const fly = (() => {
   const touchNav = matchMedia('(pointer: coarse)').matches;
-  const st = { on: false, yaw: 0, pitch: 0, keys: new Set(), joy: { x: 0, y: 0 }, vel: new THREE.Vector3() };
+  const st = { on: false, lock: false, yaw: 0, pitch: 0, keys: new Set(), joy: { x: 0, y: 0 }, vel: new THREE.Vector3() };
   const _fwd = new THREE.Vector3(), _right = new THREE.Vector3(), _move = new THREE.Vector3(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
   const LOOK = 0.0024, PITCH_MAX = 1.5;
   function syncFromCamera() {
@@ -3662,6 +3672,8 @@ const fly = (() => {
     try { const p = renderer.domElement.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch { /* drag-look fallback */ }
   }
   function exit() {
+    st.lock = false;
+    document.body.classList.remove('camlock');
     if (!st.on || touchNav) return; // mobile stays in fly mode
     st.on = false;
     st.keys.clear();
@@ -3674,25 +3686,42 @@ const fly = (() => {
     controls.enabled = true;
     controls.update();
   }
-  document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement) exit(); });
+  document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement && !st.lock) exit(); });
+  const fhEl = document.getElementById('flyhint');
+  function toggleLock() {
+    st.lock = !st.lock;
+    if (st.lock) {
+      if (!st.on) enter(false); // lock straight from orbit: freeze exactly what you see
+      else if (document.pointerLockElement) document.exitPointerLock();
+      document.body.classList.add('camlock');
+      fhEl.textContent = touchNav ? 'view locked · joystick glides' : 'view locked · WASD/arrows glide · Space unlocks';
+      fhEl.style.opacity = '1';
+    } else {
+      document.body.classList.remove('camlock');
+      if (touchNav) { fhEl.textContent = 'joystick to fly · drag to look'; }
+      else exit();
+    }
+  }
+  document.getElementById('lockbtn').addEventListener('click', toggleLock);
   // ---- desktop keys (WASD/arrows enter fly mode; Esc exits via pointer lock or directly) ----
-  const KEYMAP = { w: 'f', arrowup: 'f', s: 'b', arrowdown: 'b', a: 'l', arrowleft: 'l', d: 'r', arrowright: 'r', ' ': 'u', c: 'd' };
+  const KEYMAP = { w: 'f', arrowup: 'f', s: 'b', arrowdown: 'b', a: 'l', arrowleft: 'l', d: 'r', arrowright: 'r', e: 'u', c: 'd' };
   addEventListener('keydown', (e) => {
     const t = e.target && e.target.tagName;
     if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
     const k = KEYMAP[e.key.toLowerCase()];
     if (e.key === 'Escape') { exit(); return; }
+    if (e.key === ' ') { e.preventDefault(); toggleLock(); return; } // Space: freeze view, glide with WASD
     if (!k) return;
-    if (!st.on && (e.key === ' ' || e.key.toLowerCase() === 'c')) return; // space/c only act once flying
-    e.preventDefault(); // keep arrows/space from scrolling or re-clicking focused buttons
-    enter(true);
+    if (!st.on && 'ec'.includes(e.key.toLowerCase())) return; // vertical keys only act once flying
+    e.preventDefault(); // keep arrows from scrolling or re-clicking focused buttons
+    enter(!st.lock); // movement keys grab mouse-look only when the view isn't locked
     st.keys.add(k);
   });
   addEventListener('keyup', (e) => { const k = KEYMAP[e.key.toLowerCase()]; if (k) st.keys.delete(k); });
   addEventListener('blur', () => st.keys.clear());
   // ---- mouse-look: trusted mousemove while pointer-locked (unmirrored) ----
   addEventListener('mousemove', (e) => {
-    if (!st.on || !document.pointerLockElement) return;
+    if (!st.on || st.lock || !document.pointerLockElement) return;
     st.yaw += e.movementX * LOOK;            // mirrored display: sign flipped vs normal FPS
     st.pitch = clamp(st.pitch - e.movementY * LOOK, -PITCH_MAX, PITCH_MAX);
   });
@@ -3700,7 +3729,7 @@ const fly = (() => {
   // these arrive as the shim's synthetic events (mirrored clientX): flip X again
   let lookId = null, lx = 0, ly = 0;
   renderer.domElement.addEventListener('pointerdown', (e) => {
-    if (!st.on || document.pointerLockElement || lookId !== null) return;
+    if (!st.on || st.lock || document.pointerLockElement || lookId !== null) return;
     lookId = e.pointerId; lx = e.clientX; ly = e.clientY;
   });
   renderer.domElement.addEventListener('pointermove', (e) => {
@@ -3746,6 +3775,11 @@ const fly = (() => {
     camera.quaternion.setFromEuler(_e);
     camera.getWorldDirection(_fwd);
     _right.crossVectors(_fwd, camera.up).normalize();
+    if (st.lock) { // orientation frozen: glide on the horizontal plane (E/C still climb)
+      _fwd.y = 0;
+      if (_fwd.lengthSq() < 0.003) _fwd.set(Math.sin(st.yaw), 0, -Math.cos(st.yaw)); // looking straight down
+      _fwd.normalize();
+    }
     let f = 0, r = 0, u = 0;
     if (st.keys.has('f')) f += 1; if (st.keys.has('b')) f -= 1;
     if (st.keys.has('r')) r += 1; if (st.keys.has('l')) r -= 1;
