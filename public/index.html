@@ -2157,6 +2157,13 @@ const NECKLACE = []; // bridge/arch light positions (consumed by section 21's em
   // but never in the bay, never west of a sampled real shoreline
   const landB = (x, z) => {
     if (bayContains(x, z)) return false;
+    // Harlem corridor: the real Bronx bank bakes WEST of the visual channel
+    // (stylized upper Manhattan is wider than the calibration) — keep all
+    // borough content east of the channel the plate clamp defines
+    if (z > 12800 && z < 21500) {
+      const ee = Math.max(bxShoreX(z) ?? -1e9, coastAt(Math.min(z, 21400)).e + 120) + 12;
+      if (x < ee) return false;
+    }
     if (bkContains(x, z) || bxContains(x, z)) return true;
     if (qnContains(x, z) && !bkContains(x, z)) return true;
     if (x > 8600 || z < -8400 || z > 23800) return false;
@@ -2633,24 +2640,45 @@ function buildBridge(cfg) {
   BRIDGE_ROUTES.push(pts.map(p => new THREE.Vector3(p.x + px * lane, p.y + 1.6, p.z + pz * lane)));
   BRIDGE_ROUTES.push(pts.slice().reverse().map(p => new THREE.Vector3(p.x - px * lane, p.y + 1.6, p.z - pz * lane)));
 }
-buildBridge({ ax: 660, az: 1580, bx: 1850, bz: 900, t1: 0.3, t2: 0.7, towerH: 84, deckY: 38, deckW: 18, col: [0.62, 0.57, 0.48], style: 'gothic', detail: true });  // Brooklyn Br (granite)
-buildBridge({ ax: 760, az: 2230, bx: 1950, bz: 1650, t1: 0.3, t2: 0.7, towerH: 102, deckY: 42, deckW: 20, col: [0.38, 0.45, 0.58], style: 'steel', detail: true }); // Manhattan Br
-buildBridge({ ax: 950, az: 3620, bx: 2150, bz: 3350, t1: 0.28, t2: 0.72, towerH: 96, deckY: 40, deckW: 21, col: [0.48, 0.50, 0.52], style: 'steel' });
-buildBridge({ ax: 1080, az: 8180, bx: 2450, bz: 8240, t1: 0.26, t2: 0.74, towerH: 106, deckY: 42, deckW: 20, col: [0.60, 0.58, 0.52], style: 'truss', detail: true }); // Queensboro (cantilever)
-buildBridge({ ax: 1030, az: 13560, bx: 2350, bz: 14150, t1: 0.3, t2: 0.7, towerH: 88, deckY: 40, deckW: 18, col: [0.42, 0.46, 0.52], style: 'steel' });
-buildBridge({ ax: -1240, az: 17700, bx: -2330, bz: 17740, t1: 0.22, t2: 0.78, towerH: 184, deckY: 65, deckW: 26, col: [0.55, 0.57, 0.60], style: 'steel', extA: 260, extB: 160 });
-// small Harlem River crossings
-for (const hz of [16300, 17200, 18300, 19600, 20600]) {
-  const c = coastAt(hz);
-  const bxr = c.e + 190;
-  for (let i = 0; i < 6; i++) {
-    const t0 = i / 6, t1b = (i + 1) / 6;
-    pushBoxG(LS, lerp(c.e - 30, bxr, (t0 + t1b) / 2), hz, 10, 2, (bxr - c.e + 30) / 6 + 1, 10, 0, [0.40, 0.42, 0.45], 0.3, -1);
-  }
-  pushBeam(LS, c.e - 30, 11, hz - 5, bxr, 11, hz - 5, 0.5, [0.40, 0.42, 0.45]);
-  BRIDGE_ROUTES.push([new THREE.Vector3(c.e - 30, 13, hz), new THREE.Vector3(bxr, 13, hz)]);
-  BRIDGE_ROUTES.push([new THREE.Vector3(bxr, 13, hz), new THREE.Vector3(c.e - 30, 13, hz)]);
-}
+/* ---- STREET-TRUTH bridges: every anchor is derived from the named bridge
+   edges in the CSCL graph (main-axis extreme points; approaches are inside
+   the span → small extA/extB). ---- */
+buildBridge({ ax: 218, az: 1809, bx: 1893, bz: 1316, t1: 0.34, t2: 0.66, towerH: 84, deckY: 38, deckW: 18, col: [0.62, 0.57, 0.48], style: 'gothic', detail: true, extA: 60, extB: 60 });   // Brooklyn Br (real: City Hall → Tillary)
+buildBridge({ ax: 679, az: 2625, bx: 2182, bz: 1288, t1: 0.32, t2: 0.62, towerH: 102, deckY: 42, deckW: 20, col: [0.38, 0.45, 0.58], style: 'steel', detail: true, extA: 60, extB: 60 });   // Manhattan Br (real: Canal → Flatbush Ext)
+buildBridge({ ax: 1284, az: 3170, bx: 3258, bz: 3488, t1: 0.30, t2: 0.60, towerH: 96, deckY: 40, deckW: 21, col: [0.48, 0.50, 0.52], style: 'steel', extA: 60, extB: 60 });                 // Williamsburg Br (real: Delancey → S 5th)
+buildBridge({ ax: 801, az: 8186, bx: 2711, bz: 8197, t1: 0.30, t2: 0.55, towerH: 106, deckY: 42, deckW: 20, col: [0.60, 0.58, 0.52], style: 'truss', detail: true, extA: 60, extB: 60 });   // Ed Koch Queensboro (real: 2 Av → Queens Plaza)
+buildBridge({ ax: -1278, az: 17493, bx: -2330, bz: 17250, t1: 0.20, t2: 0.62, towerH: 184, deckY: 65, deckW: 26, col: [0.55, 0.57, 0.60], style: 'steel', extA: 80, extB: 160 });           // George Washington Br
+buildBridge({ ax: 3174, az: -8889, bx: 2500, bz: -9950, t1: 0.28, t2: 0.72, towerH: 205, deckY: 62, deckW: 28, col: [0.52, 0.54, 0.58], style: 'steel', extA: 120, extB: 120 });            // Verrazzano-Narrows
+// RFK/Triborough: three legs meeting on Randalls Island
+buildBridge({ ax: 3027, az: 11051, bx: 2160, bz: 12250, t1: 0.30, t2: 0.70, towerH: 92, deckY: 42, deckW: 18, col: [0.42, 0.46, 0.52], style: 'steel', extA: 60, extB: 40 });               // RFK Queens leg (Hell Gate channel)
+buildBridge({ ax: coastAt(13400).e - 55, az: 13419, bx: 1900, bz: 13280, t1: 0.30, t2: 0.70, towerH: 48, deckY: 30, deckW: 16, col: [0.42, 0.46, 0.52], style: 'steel', extA: 50, extB: 40 }); // RFK Manhattan leg (channel-fitted west end)
+buildBridge({ ax: 1956, az: 13484, bx: 2014, bz: 14022, t1: 0.32, t2: 0.68, towerH: 40, deckY: 26, deckW: 16, col: [0.42, 0.46, 0.52], style: 'steel', extA: 40, extB: 50 });               // RFK Bronx leg
+// Long Island Sound + Newtown Creek + Roosevelt Island
+buildBridge({ ax: 7316, az: 18278, bx: 8674, bz: 17099, t1: 0.30, t2: 0.70, towerH: 115, deckY: 45, deckW: 20, col: [0.55, 0.58, 0.62], style: 'steel', extA: 120, extB: 120 });            // Bronx-Whitestone
+buildBridge({ ax: 11309, az: 17806, bx: 9445, bz: 20164, t1: 0.32, t2: 0.68, towerH: 110, deckY: 44, deckW: 20, col: [0.52, 0.55, 0.58], style: 'steel', extA: 120, extB: 120 });           // Throgs Neck
+buildBridge({ ax: 4319, az: 5965, bx: 4541, bz: 7002, t1: 0.40, t2: 0.60, towerH: 58, deckY: 34, deckW: 18, col: [0.72, 0.30, 0.24], style: 'steel', extA: 60, extB: 60 });                 // Kosciuszko (cable-stayed red)
+buildBridge({ ax: 2614, az: 6217, bx: 2354, bz: 7017, t1: 0.35, t2: 0.65, towerH: 16, deckY: 12, deckW: 14, col: [0.55, 0.35, 0.30], style: 'truss', extA: 40, extB: 40 });                 // Pulaski (low drawbridge)
+buildBridge({ ax: 1714, az: 9172, bx: 2063, bz: 9161, t1: 0.35, t2: 0.65, towerH: 30, deckY: 18, deckW: 12, col: [0.55, 0.30, 0.25], style: 'truss', extA: 30, extB: 30 });                 // Roosevelt Island Br
+// the real Harlem River set: TRUE crossing latitudes (az/bz), but x-extents
+// fitted to the VISUAL channel — upper Manhattan's stylized coast is wider
+// than the calibration, so raw real anchors land inside the island (same
+// pinch as Roosevelt Island; the Bronx plate clamp defines the channel)
+const harlemBridge = (az, bz, towerH, deckY, deckW, col) => {
+  const zm = (az + bz) / 2;
+  const wEdge = coastAt(Math.min(zm, 21400)).e;
+  const eEdge = Math.max(bxShoreX(zm) ?? -1e9, wEdge + 120) + 15;
+  buildBridge({ ax: wEdge - 55, az, bx: eEdge + 55, bz, t1: 0.35, t2: 0.65, towerH, deckY, deckW, col, style: 'truss', extA: 25, extB: 25 });
+};
+harlemBridge(13413, 13700, 22, 14, 16, [0.60, 0.58, 0.55]); // Willis Ave
+harlemBridge(13655, 13900, 20, 13, 15, [0.58, 0.56, 0.53]); // Third Ave
+harlemBridge(14202, 14380, 20, 13, 14, [0.58, 0.56, 0.53]); // Madison Ave
+harlemBridge(14994, 15080, 18, 12, 14, [0.58, 0.56, 0.53]); // 145 St
+harlemBridge(15789, 15980, 18, 12, 14, [0.60, 0.55, 0.50]); // Macombs Dam
+harlemBridge(17280, 17400, 16, 24, 8, [0.62, 0.58, 0.52]);  // High Bridge (aqueduct)
+harlemBridge(17643, 17720, 26, 22, 20, [0.55, 0.56, 0.58]); // Alexander Hamilton
+harlemBridge(17853, 17820, 24, 20, 18, [0.56, 0.55, 0.53]); // Washington Br
+harlemBridge(19899, 19897, 16, 11, 13, [0.58, 0.56, 0.53]); // University Heights
+harlemBridge(21100, 20900, 34, 28, 16, [0.45, 0.52, 0.48]); // Henry Hudson (Spuyten Duyvil)
 {
   const lm = new THREE.Mesh(sinkToGeometry(LS), patchCityMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), 0));
   lm.matrixAutoUpdate = false; lm.castShadow = true; lm.receiveShadow = true;
