@@ -214,7 +214,7 @@
   <span id="tlBadge" class="live"><i></i>LIVE</span>
   <div id="tlWrap">
     <div id="tlTicks"></div>
-    <input id="timeSlider" type="range" min="-10080" max="720" step="5" value="0" title="Scrub the city back through the last 7 days &middot; forward previews the sun">
+    <input id="timeSlider" type="range" min="-10080" max="0" step="5" value="0" title="Scrub the city back through the last 7 days">
   </div>
   <button id="timeReset" title="Back to now">now</button>
 </div>
@@ -4612,9 +4612,9 @@ const timeline = (() => {
   async function apply(off) {
     const gen = ++applyGen;
     live.setScrub(off);
-    if (off >= 0) {
+    if (off >= 0) { // slider tops out at NOW (far right); >0 only via the #scrub hash
       exit();
-      setBadge(off === 0 ? 'live' : 'sun', off === 0 ? 'LIVE' : 'sun +' + (off / 60).toFixed(1) + 'h');
+      setBadge('live', 'LIVE');
       return;
     }
     const day = dayOf(off);
