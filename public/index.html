@@ -6462,44 +6462,79 @@ window.__citibike = citibike; // dev/testing hook
 const birds = (() => {
   const CAP = 600;
   const X0 = -3000, X1 = 3000, Z0 = -800, Z1 = 22300; // Manhattan corridor + margins
-  // silhouette: two swept wings (airlife's bird, scaled up for altitude readability)
+  // real bird silhouette: slim body + tail fan + two-segment wings (arm + swept
+  // hand); +z = forward like the buses. The shader articulates the wing joint.
   const geo = new THREE.BufferGeometry();
   {
-    const pos = new Float32Array([0, 0, 1.2, -2.6, 0, -1, 0, 0, -0.4, 0, 0, 1.2, 0, 0, -0.4, 2.6, 0, -1].map(v => v * 2.4));
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const S = 2.0, tris = [], cols = [];
+    const T = (a, b, c, col) => { tris.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) cols.push(...col); };
+    const BODY = [0.085, 0.075, 0.09], WING = [0.11, 0.10, 0.115], TIP = [0.055, 0.05, 0.065];
+    T([0, 0, 3.4], [-0.7, 0, 0.2], [0, 0, -2.4], BODY);          // body, left half
+    T([0, 0, 3.4], [0, 0, -2.4], [0.7, 0, 0.2], BODY);           // body, right half
+    T([-0.9, 0, -4.1], [0.9, 0, -4.1], [0, 0, -2.0], BODY);      // tail fan
+    for (const s of [-1, 1]) {                                    // wings: inner arm quad + tapered hand
+      T([s * 0.7, 0, 1.6], [s * 3.2, 0, 0.9], [s * 3.2, 0, -0.7], WING);
+      T([s * 0.7, 0, 1.6], [s * 3.2, 0, -0.7], [s * 0.7, 0, -1.2], WING);
+      T([s * 3.2, 0, 0.9], [s * 6.3, 0, -0.9], [s * 3.2, 0, -0.7], TIP); // hand sweeps back
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(tris.map(v => v * S)), 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cols), 3));
     const ph = new Float32Array(CAP); const RR = rng(4061);
     for (let i = 0; i < CAP; i++) ph[i] = RR() * TAU;
     geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(ph, 1));
   }
   const mat = new THREE.ShaderMaterial({
-    side: THREE.DoubleSide,
+    side: THREE.DoubleSide, vertexColors: true,
     uniforms: { uTime: cityUniforms.uTime, uFogColor: FOG_UNI.uFogColor, uFogDensity: FOG_UNI.uFogDensity },
     vertexShader: `
-      attribute float aPhase; uniform float uTime; varying float vFog;
+      attribute float aPhase; uniform float uTime; varying float vFog; varying vec3 vC; varying float vL;
       void main(){
         vec3 p = position;
-        p.y += sin(uTime * 7.0 + aPhase) * abs(position.x) * 0.55; // slower beat than park birds: travelers, not loiterers
+        // flap-glide: migrants burst-flap then hold a shallow V — g fades the beat in/out per bird
+        float g = smoothstep(0.25, 0.75, 0.5 + 0.5 * sin(uTime * 0.37 + aPhase * 5.3));
+        float w = abs(position.x);
+        float arm = min(w, 6.4), hand = max(w - 6.4, 0.0); // joint at the wrist (geometry units ×2)
+        float f1 = sin(uTime * 5.6 + aPhase);
+        float f2 = sin(uTime * 5.6 + aPhase - 0.85);        // wingtip lags the arm
+        p.y += (f1 * arm * 0.34 + f2 * hand * 0.75) * g;
+        p.y += (1.0 - g) * w * 0.16;                        // glide: wings held in a dihedral V
+        vL = 0.8 + 0.35 * f1 * g + 0.25 * fract(aPhase * 7.13); // downstroke catches light + per-bird tint
+        vC = color;
         vec4 mv = viewMatrix * modelMatrix * instanceMatrix * vec4(p, 1.0);
         vFog = -mv.z;
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: `
-      varying float vFog; uniform vec3 uFogColor; uniform float uFogDensity;
+      varying float vFog; varying vec3 vC; varying float vL;
+      uniform vec3 uFogColor; uniform float uFogDensity;
       void main(){
         float f = 1.0 - exp(-pow(vFog * uFogDensity, 2.0));
-        gl_FragColor = vec4(mix(vec3(0.10, 0.10, 0.12), uFogColor, f), 1.0);
+        gl_FragColor = vec4(mix(vC * vL, uFogColor, f), 1.0);
       }`
   });
   const mesh = new THREE.InstancedMesh(geo, mat, CAP);
   mesh.count = 0; mesh.frustumCulled = false;
   scene.add(mesh);
-  // per-bird state; the whole pool is pre-seeded, D drives how many are shown
+  // per-bird state; the whole pool is pre-seeded, D drives how many are shown.
+  // ~40% of the pool travels in V-formation skeins (waterfowl-style: a leader plus
+  // alternating left/right slots); the rest are loose singles (passerine-style).
+  // Groups are contiguous with the leader first, so any visible member's leader
+  // is always visible too (i < N ⇒ ldr < N).
   const RB = rng(4062);
   const B = [];
-  for (let i = 0; i < CAP; i++)
-    B.push({ x: X0 + RB() * (X1 - X0), z: Z0 + RB() * (Z1 - Z0), y: 200,
-             jit: (RB() - 0.5) * 0.42, sp: 0.8 + RB() * 0.4, wob: RB() * TAU, yr: RB() });
-  let D = null, N = 0, hd = 0, spd = 6;
+  {
+    let i = 0;
+    while (i < CAP) {
+      const n = (RB() < 0.42 && i + 12 < CAP) ? 5 + Math.floor(RB() * 7) : 1;
+      const ldr = i;
+      for (let k = 0; k < n && i < CAP; k++, i++)
+        B.push({ x: X0 + RB() * (X1 - X0), z: Z0 + RB() * (Z1 - Z0), y: 200,
+                 jit: (RB() - 0.5) * 0.42, sp: 0.8 + RB() * 0.4, wob: RB() * TAU, yr: RB(),
+                 sc: 0.65 + RB() * 0.75,                       // species-size spread
+                 ldr: k === 0 ? -1 : ldr, slot: (k + 1) >> 1, side: (k & 1) ? 1 : -1 });
+    }
+  }
+  let D = null, N = 0, hd = 0, spd = 6, sizeK = 16, farK = 6;
   const yFor = (b) => { // altitude band from the radar's mean/max heights (compressed like nothing else flies that high)
     const ym = (70 + Math.min(D.hMeanM || 400, 3000) * 0.28) * 1.5;
     const yx = Math.max(ym * 1.15, (70 + Math.min(D.hMaxM || 700, 3500) * 0.24) * 1.5);
@@ -6512,6 +6547,11 @@ const birds = (() => {
     hd = ((D.dirDeg || 0) * Math.PI) / 180 - GRID_ROT; // toward-direction → world yaw
     spd = Math.max(2, D.speedMs || 4) * 1.8;           // slight cinematic multiplier
     N = BIRDS.aloft <= 0 ? 0 : Math.min(CAP, Math.ceil(4 * Math.sqrt(BIRDS.aloft)));
+    // adaptive size: sparse skies keep the hero-scale birds; dense migration nights
+    // shrink them toward natural proportions (and cap the far boost) so 600 birds
+    // read as a flowing river, not a thicket of overlapping wings
+    sizeK = 16 * clamp(Math.sqrt(90 / Math.max(N, 1)), 0.38, 1);
+    farK = N > 220 ? 3 : 6;
     for (const b of B) b.y = yFor(b);
     if (N < mesh.count) for (let i = N; i < mesh.count; i++) mesh.setMatrixAt(i, _bdZero);
     mesh.count = N;
@@ -6532,25 +6572,43 @@ const birds = (() => {
     setData(d);
   }
   const _bdM = new THREE.Matrix4(), _bdQ = new THREE.Quaternion(), _bdS = new THREE.Vector3(),
-        _bdV = new THREE.Vector3(), _bdUp = new THREE.Vector3(0, 1, 0), _bdZero = new THREE.Matrix4().makeScale(0, 0, 0);
+        _bdV = new THREE.Vector3(), _bdE = new THREE.Euler(0, 0, 0, 'YXZ'),
+        _bdZero = new THREE.Matrix4().makeScale(0, 0, 0);
+  function respawn(b) { // left the corridor along the travel direction → re-enter upstream
+    if (Math.abs(Math.sin(hd)) > Math.abs(Math.cos(hd))) { b.x = Math.sin(hd) > 0 ? X0 : X1; b.z = Z0 + RB() * (Z1 - Z0); }
+    else { b.z = Math.cos(hd) > 0 ? Z0 : Z1; b.x = X0 + RB() * (X1 - X0); }
+    b.y = yFor(b);
+  }
   function update(t, dt) {
     if (!polling && t >= poll && !HIST.active) doPoll();
     if (!N) return;
-    const sx = Math.sin(hd), sz = Math.cos(hd);
+    const kFollow = 1 - Math.exp(-dt * 2.5);
     for (let i = 0; i < N; i++) {
       const b = B[i];
-      const h = hd + b.jit + Math.sin(t * 0.35 + b.wob) * 0.12; // lazy weave inside the stream
-      b.x += Math.sin(h) * spd * b.sp * dt;
-      b.z += Math.cos(h) * spd * b.sp * dt;
-      // left the corridor along the travel direction → respawn on the upstream edge
-      if (b.x < X0 || b.x > X1 || b.z < Z0 || b.z > Z1) {
-        if (Math.abs(sx) > Math.abs(sz)) { b.x = sx > 0 ? X0 : X1; b.z = Z0 + RB() * (Z1 - Z0); }
-        else { b.z = sz > 0 ? Z0 : Z1; b.x = X0 + RB() * (X1 - X0); }
-        b.y = yFor(b);
+      const L = b.ldr >= 0 ? B[b.ldr] : null;
+      // heading: singles weave lazily; skein members fly the LEADER's weave so the V turns as one
+      const wob = L ? L.wob : b.wob;
+      const h = hd + (L ? L.jit : b.jit) + Math.sin(t * 0.35 + wob) * 0.12;
+      if (!L) {
+        b.x += Math.sin(h) * spd * b.sp * dt;
+        b.z += Math.cos(h) * spd * b.sp * dt;
+        if (b.x < X0 || b.x > X1 || b.z < Z0 || b.z > Z1) respawn(b);
+      } else {
+        // hold the V slot behind the leader; spacing rides the leader's display scale
+        // so the skein stays readable (and non-overlapping) at every camera distance
+        const kL = sizeK * clamp(_bdV.set(L.x, L.y, L.z).distanceTo(camera.position) / 1500, 1, farK);
+        const fx = Math.sin(h), fz = Math.cos(h);
+        const tx = L.x + (-fx * 9.5 + fz * b.side * 8.2) * b.slot * kL;
+        const tz = L.z + (-fz * 9.5 - fx * b.side * 8.2) * b.slot * kL;
+        const dx = tx - b.x, dz = tz - b.z;
+        if (dx * dx + dz * dz > 4e6) { b.x = tx; b.z = tz; b.y = L.y; } // leader wrapped: snap, don't streak
+        else { b.x += dx * kFollow; b.z += dz * kFollow; }
+        b.y += (L.y - b.slot * 0.15 * kL - b.y) * kFollow;
       }
       const yy = b.y + Math.sin(t * 0.7 + b.wob) * 8;
-      _bdQ.setFromAxisAngle(_bdUp, h);
-      _bdS.setScalar(16 * clamp(_bdV.set(b.x, yy, b.z).distanceTo(camera.position) / 1500, 1, 6));
+      _bdE.set(0, h, -Math.cos(t * 0.35 + wob) * 0.30); // bank into the weave
+      _bdQ.setFromEuler(_bdE);
+      _bdS.setScalar(sizeK * b.sc * clamp(_bdV.set(b.x, yy, b.z).distanceTo(camera.position) / 1500, 1, farK));
       _bdM.compose(_bdV, _bdQ, _bdS);
       mesh.setMatrixAt(i, _bdM);
     }
