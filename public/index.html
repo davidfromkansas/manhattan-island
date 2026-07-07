@@ -148,7 +148,19 @@
     border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:4px 10px;
     user-select:none; transition:opacity .4s;
   }
-  #scrub input[type=range] { width:190px; accent-color:#e8a558; height:10px; }
+  #scrub input[type=range] { width:min(280px, 46vw); accent-color:#e8a558; height:10px; }
+  #tlWrap { position:relative; display:flex; align-items:center; }
+  #tlTicks { position:absolute; left:8px; right:8px; top:-2px; height:4px; pointer-events:none; }
+  #tlTicks i { position:absolute; width:4px; height:4px; border-radius:50%; background:#7fd7ff; opacity:.9; transform:translateX(-50%); }
+  #tlBadge {
+    display:flex; align-items:center; gap:4px; font-weight:600; white-space:nowrap;
+    min-width:58px; justify-content:center; padding:1px 6px; border-radius:6px;
+    background:rgba(255,255,255,.06); color:rgba(255,255,255,.55);
+  }
+  #tlBadge i { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.3); flex:0 0 auto; }
+  #tlBadge.live { color:#fff; } #tlBadge.live i { background:#ff5f56; animation:camblink 1.6s infinite; }
+  #tlBadge.sun { color:#e8a558; } #tlBadge.sun i { background:#e8a558; }
+  #tlBadge.past { color:#7fd7ff; } #tlBadge.past i { background:#7fd7ff; }
   #scrub button {
     font:10px system-ui,sans-serif; color:rgba(255,255,255,.8); cursor:pointer;
     background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.10);
@@ -199,8 +211,11 @@
 <div id="dbg"></div>
 <div id="chip"></div>
 <div id="scrub">
-  <span id="scrubLbl">sun time</span>
-  <input id="timeSlider" type="range" min="-720" max="720" step="5" value="0" title="Offset the sun &plusmn;12h (weather stays current)">
+  <span id="tlBadge" class="live"><i></i>LIVE</span>
+  <div id="tlWrap">
+    <div id="tlTicks"></div>
+    <input id="timeSlider" type="range" min="-10080" max="720" step="5" value="0" title="Scrub the city back through the last 7 days &middot; forward previews the sun">
+  </div>
   <button id="timeReset" title="Back to now">now</button>
 </div>
 
@@ -4310,6 +4325,10 @@ const precipOverlay = (() => {
   };
 })();
 
+// shared history-playback state: when active, live modules stop polling/evicting
+// and render the recorded moment; the subway clock freezes at epochS. Set only
+// by the timeline module below.
+const HIST = { active: false, day: '', epochS: 0, liveWx: null };
 const live = (() => {
   const FAKE = { time: null, weather: null };
   // neutral defaults keep Live usable fully offline
@@ -4410,7 +4429,8 @@ const live = (() => {
       .then(cur => {
         if (FAKE.weather || !cur) return; // a test override landed while the request was in flight
         W.offline = false; failCount = 0;
-        applyWeather(cur);
+        HIST.liveWx = cur;                    // keep the freshest live obs for scrub-return
+        if (!HIST.active) applyWeather(cur);  // never stomp a replayed day's weather
         setTimeout(runFetch, 600000); // refresh every 10 min
       })
       .catch(() => {
@@ -4452,6 +4472,7 @@ const live = (() => {
   refreshFXHook = refreshFX;
   // NYC wall clock
   const TIME_FMT = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
+  const WD_FMT = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
   const HOUR_FMT = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23', hour: 'numeric', minute: 'numeric' });
   const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   function condText(c) {
@@ -4465,10 +4486,13 @@ const live = (() => {
     if (!active) return;
     const f = Math.round((W.tempC * 9) / 5 + 32);
     const mph = Math.round(W.windKmh * 0.621371);
-    chipEl.innerHTML = TIME_FMT.format(new Date(nowMs())) + ' · ' + f + '°F · ' + condText(W.code) +
+    const dt_ = new Date(nowMs());
+    chipEl.innerHTML = (HIST.active || scrubMin <= -720 ? WD_FMT.format(dt_) + ' · ' : '') + TIME_FMT.format(dt_) +
+      ' · ' + f + '°F · ' + condText(W.code) +
       ' · ' + COMPASS[Math.round(W.windDir / 45) % 8] + ' ' + mph + ' mph' +
-      (scrubMin !== 0 ? ' <span class="off">· sun ' + (scrubMin > 0 ? '+' : '−') + (Math.abs(scrubMin) / 60).toFixed(1) + 'h</span>' : '') +
-      (W.offline ? ' <span class="off">· weather offline</span>' : '');
+      (HIST.active ? ' <span class="off">· replaying ' + HIST.day + '</span>'
+        : scrubMin !== 0 ? ' <span class="off">· sun ' + (scrubMin > 0 ? '+' : '−') + (Math.abs(scrubMin) / 60).toFixed(1) + 'h</span>' : '') +
+      (W.offline && !HIST.active ? ' <span class="off">· weather offline</span>' : '');
   }
   function computeLate() {
     const p = HOUR_FMT.format(new Date(nowMs())).split(':');
@@ -4529,12 +4553,103 @@ const live = (() => {
   }
   return { activate, deactivate, tick, force, applyWeather, setScrub, FAKE, W };
 })();
-// time scrubber (Live mode only — offsets the sun, weather stays current)
-{
+// merged timeline (Live mode) — ONE slider: 7 days of recorded city ←→ NOW ←→ +12h sun preview.
+// Sun position always follows the thumb; scrubbing into a past day snaps the whole city
+// (buses, trains, boats, planes, bike docks, weather) to that day's recorded snapshot —
+// the "daily photograph" model. Cameras stay visible but stream live-only.
+const timeline = (() => {
   const slider = document.getElementById('timeSlider'), reset = document.getElementById('timeReset');
-  slider.addEventListener('input', () => live.setScrub(+slider.value));
-  reset.addEventListener('click', () => { slider.value = 0; live.setScrub(0); });
-}
+  const badge = document.getElementById('tlBadge'), ticks = document.getElementById('tlTicks');
+  const MIN = +slider.min, MAX = +slider.max;
+  const DAY_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' });
+  const LBL_FMT = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' });
+  const midday = (day) => Date.parse(day + 'T12:00:00Z'); // stable per-day anchor for distances/labels
+  let manifest = null, manifestAt = 0, mLoading = null, applyGen = 0, debounceT = null;
+  const frames = new Map(); // day → parsed snapshot
+  const dayOf = (offMin) => DAY_FMT.format(new Date(Date.now() + offMin * 60000));
+  const availDays = () => (manifest && manifest.daily || [])
+    .map(p => (p.match(/\d{4}-\d{2}-\d{2}/) || [''])[0]).filter(Boolean).sort();
+  function renderTicks() { // a dot on the track for every recorded day (gaps show as missing dots)
+    ticks.innerHTML = '';
+    for (const d of availDays()) {
+      const off = (midday(d) - Date.now()) / 60000;
+      if (off < MIN || off > 0) continue;
+      const i = document.createElement('i');
+      i.style.left = ((off - MIN) / (MAX - MIN) * 100) + '%';
+      i.title = d;
+      ticks.appendChild(i);
+    }
+  }
+  function ensureManifest() {
+    if (manifest && Date.now() - manifestAt < 300000) return Promise.resolve(manifest);
+    if (mLoading) return mLoading;
+    mLoading = fetch('/api/history').then(r => { if (!r.ok) throw 0; return r.json(); })
+      .then(j => { manifest = j; manifestAt = Date.now(); renderTicks(); return j; })
+      .catch(() => manifest) // keep a stale manifest over none
+      .finally(() => { mLoading = null; });
+    return mLoading;
+  }
+  function loadDay(day) {
+    if (frames.has(day)) return Promise.resolve(frames.get(day));
+    return fetch('/api/history/' + day).then(r => { if (!r.ok) throw 0; return r.json(); })
+      .then(f => { if (frames.size > 10) frames.clear(); frames.set(day, f); return f; })
+      .catch(() => null);
+  }
+  function setBadge(cls, html) { badge.className = cls; badge.innerHTML = '<i></i>' + html; }
+  function enter(frame, day) {
+    HIST.active = true; HIST.day = day; HIST.epochS = Date.parse(frame.t) / 1000;
+    if (frame.weather) live.applyWeather(frame.weather);
+    flights.hist(frame.flights || []); ferries.hist(frame.ferries || []);
+    buses.hist(frame.buses || []); subway.hist(frame.subway); citibike.hist(frame.bikes || []);
+    setBadge('past', LBL_FMT.format(new Date(midday(day))));
+  }
+  function exit() {
+    if (!HIST.active) return;
+    HIST.active = false; HIST.day = '';
+    flights.hist(null); ferries.hist(null); buses.hist(null); subway.hist(null); citibike.hist(null);
+    if (HIST.liveWx) live.applyWeather(HIST.liveWx);
+  }
+  async function apply(off) {
+    const gen = ++applyGen;
+    live.setScrub(off);
+    if (off >= 0) {
+      exit();
+      setBadge(off === 0 ? 'live' : 'sun', off === 0 ? 'LIVE' : 'sun +' + (off / 60).toFixed(1) + 'h');
+      return;
+    }
+    const day = dayOf(off);
+    if (day === dayOf(0)) { // intraday: today's snapshot doesn't exist yet — live city, sun preview only
+      exit();
+      setBadge('sun', 'sun −' + (-off / 60).toFixed(1) + 'h');
+      return;
+    }
+    await ensureManifest();
+    if (gen !== applyGen) return;
+    // daily-photograph model: snap to the nearest recorded day
+    let pick = null, bd = Infinity;
+    for (const d of availDays()) {
+      const dd = Math.abs(midday(d) - midday(day));
+      if (dd < bd) { bd = dd; pick = d; }
+    }
+    if (!pick || bd > 3.5 * 86400000) { exit(); setBadge('none', 'no recording'); return; }
+    if (HIST.active && HIST.day === pick) { setBadge('past', LBL_FMT.format(new Date(midday(pick)))); return; }
+    setBadge('none', 'loading…');
+    const frame = await loadDay(pick);
+    if (gen !== applyGen) return;
+    if (!frame) { exit(); setBadge('none', 'no recording'); return; }
+    enter(frame, pick);
+  }
+  slider.addEventListener('input', () => {
+    const v = +slider.value;
+    live.setScrub(v); // the sun tracks the thumb instantly…
+    clearTimeout(debounceT);
+    debounceT = setTimeout(() => apply(v), 160); // …the city snaps once the thumb settles
+  });
+  reset.addEventListener('click', () => { slider.value = 0; apply(0); });
+  ensureManifest(); // ticks appear on load (one tiny manifest fetch)
+  return { set: (v) => { slider.value = v; apply(v); }, apply, exit };
+})();
+window.__timeline = timeline; // dev/testing hook
 setMode('live');
 
 /* ============================================================
@@ -4824,13 +4939,13 @@ const flights = (() => {
   function update(t, dt) {
     // net scheduling driven by the frame clock — no timers, tab-pause-safe
     if (!FAKE) {
-      if (!polling && t >= nextPoll) poll();
+      if (!polling && t >= nextPoll && !HIST.active) poll();
       if (!routing && routeQueue.length && t >= nextRoute) resolveRoute();
     }
     let dirty = false, trailDirty = false;
     for (let i = list.length - 1; i >= 0; i--) {
       const p = list[i];
-      if (t - p.seen > staleSec) { removePlane(p, i); dirty = true; trailDirty = true; continue; }
+      if (!HIST.active && t - p.seen > staleSec) { removePlane(p, i); dirty = true; trailDirty = true; continue; }
       p.tgt.addScaledVector(p.v, dt);           // target advances on its velocity
       p.pos.addScaledVector(p.v, dt);           // plane dead-reckons…
       p.pos.lerp(p.tgt, 1 - Math.exp(-dt * 0.8)); // …and eases onto the advancing target
@@ -4908,7 +5023,17 @@ const flights = (() => {
     update(0, 0);
   }
   // _fly/_endTween: test hooks for the hash-driver/headless workflow
-  return { update, setFake, list, planes, routeCache,
+  // history replay: purge, then ingest the recorded fixes as a frozen tableau —
+  // velocities damped to ε so heading survives but nothing drifts. null = back to live.
+  function hist(rows) {
+    for (let i = list.length - 1; i >= 0; i--) removePlane(list[i], i);
+    pmesh.instanceMatrix.needsUpdate = true; lGeo.attributes.position.needsUpdate = true;
+    tGeo.attributes.position.needsUpdate = true; tGeo.attributes.color.needsUpdate = true;
+    if (!rows) { nextPoll = 0; pollDelay = 20; return; }
+    ingest(rows.map(r => ({ hex: r[0], cs: r[1], lat: r[2], lon: r[3], altM: r[4], gsMs: r[5], track: r[6] })), T, 0);
+    for (const p of list) { p.v.multiplyScalar(1e-4); p.tgt.copy(p.pos); }
+  }
+  return { update, setFake, hist, list, planes, routeCache,
            _fly: flyToPlane, _endTween: () => { if (camTween) camTween.t = 0.999; } };
 })();
 
@@ -5079,7 +5204,7 @@ const subway = (() => {
       .finally(() => { staticInFlight = false; });
   }
   function ingestTrips(recs, vehStatus, pollN) {
-    const nowS = Date.now() / 1000;
+    const nowS = HIST.active ? HIST.epochS : Date.now() / 1000; // history freezes the transit clock
     for (const rec of recs) {
       const routeRaw = rec.route, route = ROUTE_ALIAS[routeRaw] || routeRaw;
       const tk = ROUTE_TRUNK[routeRaw] || ROUTE_TRUNK[route];
@@ -5131,7 +5256,7 @@ const subway = (() => {
   function rebuildActive() {
     active = [...trips.values()];
     if (active.length > CAP) {
-      const nowS = Date.now() / 1000;
+      const nowS = HIST.active ? HIST.epochS : Date.now() / 1000; // history freezes the transit clock
       // prefer trips currently inside their in-bounds window; stable tiebreak so
       // membership doesn't churn between polls (a churned-out trip freezes mid-air)
       active.sort((a, b2) => (inWindow(b2, nowS) - inWindow(a, nowS)) || (a.tid < b2.tid ? -1 : 1));
@@ -5294,8 +5419,8 @@ const subway = (() => {
       if (!staticInFlight && t >= nextStatic) fetchStations();
       return; // silently dormant
     }
-    if (!FAKE && ready && !polling && t >= nextPoll) poll(false);
-    const nowS = Date.now() / 1000;
+    if (!FAKE && ready && !polling && t >= nextPoll && !HIST.active) poll(false);
+    const nowS = HIST.active ? HIST.epochS : Date.now() / 1000; // history freezes the transit clock
     let n = 0;
     for (let i = 0; i < active.length && n < CAP; i++) {
       const tr = active[i];
@@ -5416,8 +5541,20 @@ const subway = (() => {
     }
     rebuildActive();
   }
+  // history replay: repopulate trips from a recorded /api/subway payload — the module
+  // clock (nowS) is frozen at HIST.epochS while scrubbed, so trains hold mid-track
+  // exactly where the schedule had them at the recorded moment. null = back to live.
+  function hist(payload) {
+    trips.clear();
+    if (payload && Array.isArray(payload.trips)) {
+      pollN++;
+      const vs = payload.vehStatus || {};
+      ingestTrips(payload.trips, { get: tid => vs[tid] }, pollN);
+    } else nextPoll = 0;
+    rebuildActive();
+  }
   return {
-    update, setFake,
+    update, setFake, hist,
     beacons: () => pillars.count,
     lastPollAge: () => lastPollT < 0 ? -1 : T - lastPollT,
     byRoute: () => { const m = {}; for (const tr of trips.values()) m[tr.route] = (m[tr.route] || 0) + 1; return m; },
@@ -5568,11 +5705,11 @@ const ferries = (() => {
         _fyV = new THREE.Vector3(), _fyUp = new THREE.Vector3(0, 1, 0);
   let fyChipT = 0;
   function update(t, dt) {
-    if (!fyPolling && t >= fyPoll) poll();
+    if (!fyPolling && t >= fyPoll && !HIST.active) poll();
     let dirty = false;
     for (let i = fyList.length - 1; i >= 0; i--) {
       const v = fyList[i];
-      if (t - v.seen > fyStale) { // vessel left the feed: free the slot
+      if (!HIST.active && t - v.seen > fyStale) { // vessel left the feed: free the slot
         fySlots.push(v.slot); fyMesh.setMatrixAt(v.slot, _fyZero);
         vessels.delete(v.id); fyList.splice(i, 1); dirty = true;
         if (fyFollow === v) fyFollow = null;
@@ -5617,7 +5754,20 @@ const ferries = (() => {
       ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
     }
   }
-  return { update, list: fyList, vessels, _fly: flyToVessel };
+  // history replay: recorded vessels as a frozen tableau (yaw kept, motion zeroed)
+  function hist(rows) {
+    for (let i = fyList.length - 1; i >= 0; i--) {
+      const v = fyList[i];
+      fySlots.push(v.slot); fyMesh.setMatrixAt(v.slot, _fyZero);
+      vessels.delete(v.id); fyList.splice(i, 1);
+    }
+    fyMesh.instanceMatrix.needsUpdate = true; fyFollow = null;
+    if (!rows) { fyPoll = 0; fyDelay = 15; return; }
+    ingest(rows.map(r => ({ id: r[0], label: r[1], lat: r[2], lon: r[3],
+      heading: r[4] < 0 ? null : r[4], speedMs: r[5], route: r[6], headsign: r[7], docked: !!r[8] })), T, 0);
+    for (const v of fyList) { v.vx = 0; v.vz = 0; v.tgt.copy(v.pos); }
+  }
+  return { update, hist, list: fyList, vessels, _fly: flyToVessel };
 })();
 
 /* ============================================================
@@ -5693,15 +5843,26 @@ const cams = (() => {
   let active = null, timer = null;
   function refresh() {
     if (!active) return;
+    title(); // scrub state may have changed while the viewer is open
     vImg.src = IMG(active.id) + '?_=' + Date.now(); // browser keeps the last frame until the new one decodes
+  }
+  function title() { // cameras have no recorded past: while scrubbed, say so plainly
+    vName.textContent = active.name + (active.area ? ' · ' + active.area : '') +
+      (HIST.active ? ' · cameras are live-only — this is now' : '');
   }
   function open(cm) {
     active = cm;
-    vName.textContent = cm.name + (cm.area ? ' · ' + cm.area : '');
+    title();
     vImg.removeAttribute('src');
     view.style.display = 'block';
     refresh();
     clearInterval(timer); timer = setInterval(refresh, 1600);
+  }
+  { // the LIVE pill doubles as "jump to now" while the timeline is scrubbed
+    const vLive = view.querySelector('.live');
+    vLive.style.cursor = 'pointer';
+    vLive.title = 'cameras stream live only — click to jump the timeline to now';
+    vLive.addEventListener('click', () => { timeline.set(0); if (active) title(); });
   }
   function close() {
     active = null; clearInterval(timer); timer = null;
@@ -5878,12 +6039,12 @@ const buses = (() => {
         _bV = new THREE.Vector3(), _bUp = new THREE.Vector3(0, 1, 0);
   let bChipT = 0;
   function update(t, dt) {
-    if (!bPolling && t >= bPoll) poll();
+    if (!bPolling && t >= bPoll && !HIST.active) poll();
     if (!bList.length) return; // fully dormant without data
     let dirty = false;
     for (let i = bList.length - 1; i >= 0; i--) {
       const v = bList[i];
-      if (t - v.seen > bStale) {
+      if (!HIST.active && t - v.seen > bStale) {
         bSlots.push(v.slot); busMesh.setMatrixAt(v.slot, _bZero);
         fleet.delete(v.id); bList.splice(i, 1); dirty = true;
         if (bFollow === v) bFollow = null;
@@ -5928,7 +6089,21 @@ const buses = (() => {
       ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
     }
   }
-  return { update, fleet, list: bList, _fly: flyToBus };
+  // history replay: recorded fleet as a frozen tableau — same map-matching ingest
+  // (edgeId/edgeT/street join keys included), then motion zeroed so nothing drifts
+  function hist(rows) {
+    for (let i = bList.length - 1; i >= 0; i--) {
+      const v = bList[i];
+      bSlots.push(v.slot); busMesh.setMatrixAt(v.slot, _bZero);
+      fleet.delete(v.id); bList.splice(i, 1);
+    }
+    busMesh.instanceMatrix.needsUpdate = true; bFollow = null;
+    if (!rows) { bPoll = 0; bDelay = 15; return; }
+    ingest(rows.map(r => ({ id: r[0], route: r[1], lat: r[2], lon: r[3],
+      bearing: r[4] < 0 ? null : r[4], speedMs: r[5], dest: r[6] })), T, 0);
+    for (const v of bList) { v.vx = 0; v.vz = 0; v.tgt.copy(v.pos); }
+  }
+  return { update, hist, fleet, list: bList, _fly: flyToBus };
 })();
 window.__buses = buses; // dev/testing hook
 
@@ -6139,7 +6314,7 @@ const citibike = (() => {
   }
   // ---- frame ----
   function update(t, dt) {
-    if (!polling && t >= poll) doPoll();
+    if (!polling && t >= poll && !HIST.active) doPoll();
     if (!ST.length) return;
     // stations: distance-adaptive scale + live fill height
     let dirty = false;
@@ -6195,7 +6370,28 @@ const citibike = (() => {
       ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
     }
   }
-  return { update, stations: ST, riders, _pulse: pulse };
+  // history replay: recorded dock counts drive the station fills; the synthetic layer
+  // (pulses, riders, spawn queue) is cleared — inference only makes sense against NOW.
+  // prevBikes is pre-set to the snapshot so no phantom deltas fire; cleared on exit so
+  // the first live poll back doesn't read day-scale differences as a pulse storm.
+  function hist(rows) {
+    spawnQ.length = 0;
+    for (let i = riders.length - 1; i >= 0; i--) {
+      rMesh.setMatrixAt(riders[i].slot, _zero); rSlots.push(riders[i].slot); riders.splice(i, 1);
+    }
+    rMesh.instanceMatrix.needsUpdate = true;
+    for (let i = pulses.length - 1; i >= 0; i--) { pSize[pulses[i].i] = 0; pulses.splice(i, 1); }
+    if (!rows) { prevBikes.clear(); poll = 0; return; }
+    if (firstBuild) return; // stations not placed yet (needs one live GBFS info pass)
+    for (const r of rows) {
+      const st = byId.get(r[0]); if (!st) continue;
+      st.bikes = r[1]; st.ebikes = r[2]; st.docks = r[3]; st.on = !!r[4];
+      prevBikes.set(r[0], r[1]);
+      styleStation(st);
+    }
+    stMesh.instanceColor.needsUpdate = true;
+  }
+  return { update, hist, stations: ST, riders, _pulse: pulse };
 })();
 window.__citibike = citibike; // dev/testing hook
 
@@ -6217,7 +6413,7 @@ function applyHash() {
   if (h.has('q')) applyQuality(h.get('q'));
   if (h.has('cam')) { const v = h.get('cam').split(',').map(Number); if (v.length === 3) camera.position.set(v[0], v[1], v[2]); }
   if (h.has('tgt')) { const v = h.get('tgt').split(',').map(Number); if (v.length === 3) { controls.target.set(v[0], v[1], v[2]); controls.update(); } }
-  if (h.has('scrub')) { document.getElementById('timeSlider').value = h.get('scrub'); live.setScrub(Number(h.get('scrub'))); }
+  if (h.has('scrub')) timeline.set(Number(h.get('scrub')));
   if (h.has('fakeflights')) {
     try { flights.setFake(JSON.parse(h.get('fakeflights'))); }
     catch (e) { /* malformed override: ignore */ }

@@ -6,3 +6,4 @@ mta-bus-key.json
 .DS_Store
 node_modules
 /data/
+gh-data-token.json
