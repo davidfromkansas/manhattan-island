@@ -15,7 +15,7 @@ every push (every push deploys prod).
 |---|------------|------|--------|
 | A | Device-tier default quality (mobile stops running `high`) | low | ✅ done |
 | B | CDN caching for API feeds (`s-maxage` + `stale-while-revalidate`) | low | ✅ done |
-| C | Startup memory: release build-time data, then binary bakes | high | ☐ not started |
+| C | Startup memory: release build-time data (C1 ✅), then binary bakes (C2 ☐) | high | ◐ C1 done |
 | D | Consolidated `/api/live` snapshot + Web Worker parsing | high | ☐ not started |
 | E | Distance-tiered simulation updates | medium | ☐ not started |
 
@@ -136,9 +136,17 @@ small arrays (every `[x,z]` a heap object), all alive while merged geometry buil
   explicit sign-off.
 
 **Tasks**
-- [ ] C1: audit runtime consumers of `BLDG` / `G_BLOCKS` / `BLK_DATA` (grep + run)
-- [ ] C1: null build-only data post-build; measure peak + settled heap
-- [ ] C1: Verification Protocol + measurements row
+- [x] C1: audit runtime consumers of `BLDG` / `G_BLOCKS` / `BLK_DATA` (grep + run)
+      — only runtime ref was `__audit.G()` counts → captured as `G_COUNTS`
+- [x] C1: null build-only data post-build (release point after section 21, before
+      traffic); measure peak + settled heap
+- [x] C1: Verification Protocol (scene identical: 39,827 buildings, tris/calls at
+      baseline, audit counts preserved, no module errors)
+      **HONEST RESULT:** settled heap unchanged within measurement noise (532 MB vs
+      518 baseline; theoretical win ~40–50 MB from blocks+buildings columnar data).
+      Retained heap is dominated by G_EDGES/G_NODES/EDGE_HASH — that's C2's target.
+      C1 still correct & free (less GC pressure); the crash-fixing peak reduction
+      REQUIRES C2 (no-parse binary load).
 - [ ] C2: decide scope from C1 numbers; write bake script (JSON + bin from one source)
 - [ ] C2: loader + minimal consumer changes; matchStreet parity harness (below)
 - [ ] C2: Verification Protocol + measurements row

@@ -849,13 +849,15 @@ const F_WTOWER = 1, F_HVAC = 2, F_CORNICE = 4, F_FIRESC = 8, F_TALL = 16;
    ALL generation below builds on real geometry. These indexes are
    also the future agent-query substrate (edge/node/block ids).
    ============================================================ */
-const [SG_DATA, BLK_DATA, BLDG] = await Promise.all([
+let [SG_DATA, BLK_DATA, BLDG] = await Promise.all([ // let: build-time data, released after generation (PERF.md C1)
   fetch('streets.json').then(r => r.json()),
   fetch('blocks.json').then(r => r.json()),
   fetch('buildings.json').then(r => r.json()) // 305k REAL buildings as oriented boxes (one-time local bake)
 ]);
-const G_NODES = SG_DATA.nodes, G_EDGES = SG_DATA.edges, G_BLOCKS = BLK_DATA.blocks;
-console.log('[graph]', G_EDGES.length, 'street edges,', G_NODES.length, 'nodes,', G_BLOCKS.length, 'blocks');
+const G_NODES = SG_DATA.nodes, G_EDGES = SG_DATA.edges; // runtime substrate — kept forever
+let G_BLOCKS = BLK_DATA.blocks;                          // build-time only — released after 19d
+const G_COUNTS = { edges: G_EDGES.length, nodes: G_NODES.length, blocks: G_BLOCKS.length };
+console.log('[graph]', G_COUNTS.edges, 'street edges,', G_COUNTS.nodes, 'nodes,', G_COUNTS.blocks, 'blocks');
 // spatial hash of edges (200 m cells) — map-matching + proximity queries
 const EDGE_HASH = new Map();
 const ehKey = (x, z) => ((x / 200) | 0) * 8192 + ((z / 200) | 0);
@@ -1571,7 +1573,7 @@ function landOK(x, z) {
 }
 window.__audit = { coastAt, landOK, bkContains, qnContains, bxContains, bayContains,
   bkShoreX, qnShoreX, bxShoreX, matchStreet, nearestNode, BK, QB,
-  G: () => ({ edges: G_EDGES.length, nodes: G_NODES.length, blocks: G_BLOCKS.length }) }; // spatial-audit handle
+  G: () => G_COUNTS }; // spatial-audit handle (counts captured at load — block data itself is released post-build)
 
 // Roosevelt Island must fit the PINCHED stylized channel: the frozen calibration
 // makes the baked ring wider than the water between Manhattan's stylized east
@@ -3159,6 +3161,12 @@ harlemBridge(21100, 20900, 34, 28, 16, [0.45, 0.52, 0.48]); // Henry Hudson (Spu
   np.frustumCulled = false;
   scene.add(np);
 }
+
+/* PERF.md C1: everything above consumed the parsed building/block bakes; nothing at
+   runtime reads them (G_EDGES/G_NODES stay — they ARE the runtime substrate; block/
+   building counts live on in G_COUNTS). Releasing here lets GC reclaim ~10⁶ small
+   arrays from the 26 MB JSON parse before the live modules spin up. */
+SG_DATA = BLK_DATA = BLDG = G_BLOCKS = null;
 
 /* ============================================================
    22. Traffic — instanced streams with flow character
