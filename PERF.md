@@ -108,7 +108,10 @@ stale-eviction horizons (≥ 90 s) tolerate the worst case (~75 s for 15 s-TTL f
 - [x] Local curl header checks per endpoint class (buses 15/60, subway 20/80,
       citibike 30/120, cams 600, stations 86400, weather 300, history 300/day 3600,
       agent no-store) ✓
-- [ ] Prod: second hit within window shows `x-vercel-cache: HIT` (check after deploy)
+- [x] Prod: second hit within window shows `x-vercel-cache: HIT` ✓ (and `STALE` on a
+      post-window hit = stale-while-revalidate serving instantly while revalidating —
+      exactly as designed; Vercel consumes s-maxage/swr at the edge, so the
+      client-facing header collapses to `public, max-age=0`)
 - [x] Verification Protocol: clean load, weather chip live, scene at baseline
 
 **Rollback:** revert commit; headers are stateless.
