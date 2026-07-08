@@ -17,7 +17,7 @@ every push (every push deploys prod).
 | B | CDN caching for API feeds (`s-maxage` + `stale-while-revalidate`) | low | ✅ done |
 | C | Startup memory: C1 ✅ · C2a typed sinks ✅ (peak −343 MB) · C2b compress+dispose ✅ (settle 517→86 MB, GPU −48%) | high | ✅ **MOBILE CONFIRMED FIXED** (2026-07-08, user-verified on Safari + Chrome mobile after C2b; C2c not needed) |
 | D | Consolidated `/api/live` snapshot ✅ + Web Worker bridge ✅ (9 pollers → 1 off-thread; `#nolive` kill switch) | high | ✅ done (payload trims optional) |
-| E | Distance-tiered simulation updates | medium | ☐ not started |
+| E | Distance-tiered simulation updates (traffic: −38% CPU at street level, ÷2 cap aloft) | medium | ✅ done (traffic; boats/riders not worth it — ~5% of the cost) |
 
 ## Baseline (measured 2026-07-07, commit `7d434d4`, desktop Chrome via preview, local server)
 
@@ -254,10 +254,19 @@ survives (at 4 km up, far ≈ everything — use altitude to *raise* the far thr
 not to freeze the scene).
 
 **Tasks**
-- [ ] `simLOD` helper + traffic integration; visual check at hero + street level
-- [ ] Boats + riders integration
-- [ ] Exemption wiring (focus/follow/chips/photo)
-- [ ] Frame-time measurement (desktop + `low` tier) + measurements row
+- [x] Per-route LOD in the traffic module (route center/radius baked in addRoute;
+      divisors 1/2/4/8 by distance, capped at 2 above 2,200 m altitude so wide views
+      stay uniformly alive; far vehicles advance with ACCUMULATED dt — same distance
+      covered, no drift; ticks staggered by (i+frame)%divisor). `traffic._lod`
+      exposes thresholds for tuning; `window.__traffic` dev hook.
+- [x] Exemptions: NOT NEEDED for ambient traffic (no chips/click/follow attach to
+      it); live entities (buses/trains/boats with chips) are untouched by E.
+- [x] Boats + riders: SKIPPED deliberately — ~800 entities total ≈ 5% of traffic's
+      cost; not worth the added complexity. Revisit only if a future layer adds
+      thousands of simulated movers (then reuse the per-route LOD pattern).
+- [x] Frame-time measurement: traffic.update 10.29 → 6.33 ms/frame at street level
+      (−38%) with 15,607 vehicles; high-altitude cap gives ~½ rate everywhere.
+      Visual: hero + street level coherent, no stepping artifacts, no module errors.
 
 **Specific verification:** camera flights show no visible far-field "stepping" at
 hero altitude; followed bus/train stays butter-smooth; fps at `low` tier improves on
