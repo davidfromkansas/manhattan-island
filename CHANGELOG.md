@@ -6,6 +6,44 @@ the rules on adding entries.
 
 ---
 
+## ⚡ The twin now runs on phones — and everything got faster
+
+**Shipped:** July 8, 2026
+
+**TL;DR:** A five-part performance program (tracked in `PERF.md`) fixed the mobile
+crash and cut latency across the board: the app's resident memory dropped from
+517 MB to 86 MB, live-data requests are served from the CDN edge in ~60 ms, and the
+heaviest per-frame work shrank by a third — with desktop visuals byte-identical.
+
+**What you'll see:**
+- **Mobile Safari and Chrome now load and run the full twin** (previously the tab
+  crashed). Phones auto-select the existing "Low" quality preset — fewer effects,
+  same city, same live data; the quality dropdown still overrides.
+- Snappier live data everywhere: feed updates arrive from Vercel's edge cache in
+  ~55–65 ms instead of 80 ms–3 s of function/upstream time, and the page makes 4
+  network requests per minute instead of ~18.
+- Smoother frames, especially close to the street: distant ambient traffic updates
+  its pose less often (same speed, no drift), cutting the biggest per-frame CPU cost
+  by ~38%; live vehicles with chips (buses, trains, ferries) are untouched.
+
+**How it works:** measured, not guessed — heap probes traced the crash to two causes
+and the plan changed twice accordingly. (1) The merged-city geometry builders held
+~870 MB of temporary JS arrays during construction → they now write straight into
+typed arrays. (2) three.js keeps a CPU copy of every vertex attribute forever and the
+city cost 44 bytes/vertex on CPU and GPU → normals/colors/flags are now 8-bit
+(window-light patterns bit-identical; albedo steps of 1/255) and the CPU copies are
+freed the moment the GPU has them: 23 bytes/vertex and an 86 MB resident heap.
+Latency: every live feed response now carries CDN cache headers tuned to its own
+refresh rate (`stale-while-revalidate` keeps serving instantly while refreshing), and
+one Web Worker polls a consolidated `/api/live` snapshot and parses it off the main
+thread — so adding a future data source is one field in a snapshot, not another
+poller. Honest caveats: an edge-served update can be up to ~1 minute stale (motion
+stays smooth — positions dead-reckon from the data's own timestamp); phones trade
+shadows/antialiasing for stability; total bandwidth is unchanged (the wins are
+request count and main-thread time).
+
+---
+
 ## 🎯 Focus Mode + agent click-context
 
 **Shipped:** July 7, 2026
