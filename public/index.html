@@ -4519,6 +4519,64 @@ const focusui = (() => {
   return { enter, exit, tick };
 })();
 window.__focusui = focusui; // dev/testing hook
+
+/* ============================================================
+   26a2. Live-feed bridge (PERF.md workstream D, client half).
+   One Web Worker polls /api/live every 15 s and parses it OFF
+   the main thread; modules call liveBridge.get('feed') instead
+   of fetching their own endpoint — same JSON shape (per-feed
+   fetchedAt/stale from the server + the snapshot's now injected),
+   so every module's ingest/backoff/HIST gating is untouched.
+   Replaces ~9 independent pollers ≈ 1 MB/min of main-thread
+   JSON.parse with one request and a structured clone. Adding a
+   future data source = one field in /api/live, not a new poller.
+   Kill switch: #nolive in the URL hash (or worker construction
+   failing) falls back to direct per-feed fetches.
+   ============================================================ */
+const liveBridge = (() => {
+  const EP = { subway: '/api/subway', buses: '/api/buses', ferries: '/api/ferries', flights: '/api/flights',
+    citibike: '/api/citibike', traffic: '/api/traffic', trafficEvents: '/api/traffic-events',
+    birds: '/api/birds', weather: '/api/weather' };
+  async function direct(feed) {
+    const r = await fetch(EP[feed]);
+    if (!r.ok) throw new Error(feed + ' http ' + r.status);
+    return r.json();
+  }
+  let worker = null, snap = null, waiting = [];
+  if (!location.hash.includes('nolive')) {
+    try { // inline worker (single-file repo): absolute URL — blob workers can't resolve relative paths
+      const src = `const URL_LIVE = ${JSON.stringify(location.origin + '/api/live')};
+        let paused = false;
+        async function poll() {
+          if (paused) return;
+          try { const r = await fetch(URL_LIVE); if (r.ok) postMessage(await r.json()); }
+          catch (e) { /* next tick retries */ }
+        }
+        onmessage = (e) => { paused = !!e.data.pause; if (!paused) poll(); };
+        poll(); setInterval(poll, 15000);`;
+      worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      worker.onmessage = (e) => {
+        snap = e.data;
+        const w = waiting; waiting = [];
+        for (const fn of w) fn();
+      };
+      // match the old pollers' behavior: hidden tab stops polling (battery)
+      document.addEventListener('visibilitychange', () => worker.postMessage({ pause: document.hidden }));
+    } catch (e) { console.error('[liveBridge] worker unavailable → direct per-feed fetches:', e.message || e); worker = null; }
+  } else console.log('[liveBridge] #nolive → direct per-feed fetches');
+  const fromSnap = (feed) => ({ now: snap.now, ...snap.feeds[feed] });
+  function get(feed) {
+    if (!worker) return direct(feed);
+    if (snap) return Promise.resolve(fromSnap(feed));
+    return new Promise((resolve, reject) => { // before the first snapshot lands: brief wait, then direct
+      const t = setTimeout(() => { direct(feed).then(resolve, reject); }, 4000);
+      waiting.push(() => { clearTimeout(t); resolve(fromSnap(feed)); });
+    });
+  }
+  return { get, _state: () => ({ worker: !!worker, snapAt: snap ? snap.now : 0 }) };
+})();
+window.__liveBridge = liveBridge; // dev/testing hook
+
 const ordinal = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][Math.min(n % 10, 4)] || 'th');
 const live = (() => {
   const FAKE = { time: null, weather: null };
@@ -4607,8 +4665,7 @@ const live = (() => {
   // merges the 3-station cluster, maps METAR → the Open-Meteo-shaped `current` object,
   // caches 5 min, and falls back to Open-Meteo server-side. One same-origin call here.
   function fetchWeather() {
-    return fetch('/api/weather')
-      .then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+    return liveBridge.get('weather') // PERF.md D: worker-parsed snapshot, same shape
       .then(j => {
         if (!j.current || typeof j.current.temperature_2m !== 'number') throw new Error('no data');
         return j.current;
@@ -5066,8 +5123,7 @@ const flights = (() => {
   }
   function poll() {
     polling = true;
-    fetch('/api/flights') // backend owns the upstream (OpenSky) cadence + fallbacks
-      .then(r => { if (!r.ok) throw 0; return r.json(); })
+    liveBridge.get('flights') // backend owns the upstream (OpenSky) cadence + fallbacks
       .then(j => {
         if (!Array.isArray(j.ac)) throw 0;
         // learn the server's actual refresh cadence → scale the stale horizon
@@ -5437,8 +5493,7 @@ const subway = (() => {
   let pollN = 0;
   function poll(retry) {
     polling = true;
-    fetch('/api/subway') // backend decodes the 6 GTFS-rt feeds, caches 20 s
-      .then(r => { if (!r.ok) throw 0; return r.json(); })
+    liveBridge.get('subway') // backend decodes the 6 GTFS-rt feeds, caches 20 s
       .then(j => {
         if (!Array.isArray(j.trips) || !j.trips.length) throw 0;
         pollN++;
@@ -5846,8 +5901,7 @@ const ferries = (() => {
   }
   function poll() {
     fyPolling = true;
-    fetch('/api/ferries')
-      .then(r => { if (!r.ok) throw 0; return r.json(); })
+    liveBridge.get('ferries')
       .then(j => {
         if (!Array.isArray(j.vessels)) throw 0;
         if (fyLastFetched && j.fetchedAt > fyLastFetched)
@@ -6188,8 +6242,7 @@ const buses = (() => {
   }
   function poll() {
     bPolling = true;
-    fetch('/api/buses')
-      .then(r => { if (!r.ok) throw 0; return r.json(); })
+    liveBridge.get('buses')
       .then(j => {
         if (!Array.isArray(j.buses)) throw 0;
         if (!j.buses.length) { bDelay = Math.min((bDelay || 15) * 2, 300); bEmpty++; return; } // keyless server: back way off
@@ -6490,7 +6543,7 @@ const citibike = (() => {
   }
   function doPoll() {
     polling = true;
-    fetch('/api/citibike').then(r => r.json()).then(j => {
+    liveBridge.get('citibike').then(j => {
       if (!Array.isArray(j.stations) || !j.stations.length) throw 0;
       const cur = new Map();
       for (const s of j.stations) cur.set(s.id, s.bikes);
@@ -6774,7 +6827,7 @@ const birds = (() => {
   let poll = 6, delay = 120, polling = false;
   function doPoll() {
     polling = true;
-    fetch('/api/birds').then(r => { if (!r.ok) throw 0; return r.json(); })
+    liveBridge.get('birds')
       .then(j => { if (typeof j.aloft !== 'number') throw 0; setData(j); delay = 120; })
       .catch(() => { delay = Math.min(delay * 2, 600); })
       .finally(() => { polling = false; poll = T + delay; });
@@ -7254,7 +7307,7 @@ const rtraffic = (() => {
   let ePoll = 8, eDelay = 240, eBusy = false;
   function pollLinks() {
     tBusy = true;
-    fetch('/api/traffic').then(r => { if (!r.ok) throw 0; return r.json(); })
+    liveBridge.get('traffic')
       .then(j => {
         if (!Array.isArray(j.links)) throw 0;
         if (j.links.length) { ingestLinks(j.links); tDelay = 60; } // scrub-safe: rebuild reads histSpd
@@ -7265,7 +7318,7 @@ const rtraffic = (() => {
   }
   function pollEvents() {
     eBusy = true;
-    fetch('/api/traffic-events').then(r => { if (!r.ok) throw 0; return r.json(); })
+    liveBridge.get('trafficEvents')
       .then(j => {
         if (!Array.isArray(j.events)) throw 0;
         liveEvents.length = 0; liveEvents.push(...j.events);

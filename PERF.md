@@ -16,7 +16,7 @@ every push (every push deploys prod).
 | A | Device-tier default quality (mobile stops running `high`) | low | ✅ done |
 | B | CDN caching for API feeds (`s-maxage` + `stale-while-revalidate`) | low | ✅ done |
 | C | Startup memory: C1 ✅ · C2a typed sinks ✅ (peak −343 MB) · C2b compress+dispose ✅ (settle 517→86 MB, GPU −48%) | high | ✅ **MOBILE CONFIRMED FIXED** (2026-07-08, user-verified on Safari + Chrome mobile after C2b; C2c not needed) |
-| D | Consolidated `/api/live` snapshot ✅ (server) + Web Worker parsing ☐ (client) | high | ◐ server done |
+| D | Consolidated `/api/live` snapshot ✅ + Web Worker bridge ✅ (9 pollers → 1 off-thread; `#nolive` kill switch) | high | ✅ done (payload trims optional) |
 | E | Distance-tiered simulation updates | medium | ☐ not started |
 
 ## Baseline (measured 2026-07-07, commit `7d434d4`, desktop Chrome via preview, local server)
@@ -212,11 +212,23 @@ scalability foundation.
       feeds composed from the per-route caches with per-feed fetchedAt/stale, 6 s
       bounded wait per feed (a slow upstream ships last-good instead of stalling the
       snapshot), per-feed endpoints byte-identical for recorder/concierge/history
-- [ ] Worker bridge; module pollers switched one at a time (subway → buses →
-      citibike → rest), each with its own verification pass
-- [ ] Subway stop-list trim + citibike static/live split
-- [ ] Kill switch: `?nolive` hash falls back to per-feed pollers for one release
-- [ ] Verification Protocol per module + full pass at the end + measurements row
+- [x] Worker bridge (`liveBridge`, §26a2): inline blob worker polls `/api/live` every
+      15 s, parses off-thread, pauses when the tab is hidden; modules call
+      `liveBridge.get('feed')` — same JSON shape (per-feed fetchedAt/stale + snapshot
+      `now` injected), so every ingest/backoff/HIST path is untouched. All 9 sites
+      switched (weather, flights, subway, ferries, buses, citibike, birds, traffic,
+      trafficEvents); one-shots (cams list, stations, history, route, traffic-local)
+      stay direct by design.
+- [x] Kill switch: `#nolive` hash (or worker construction failure) → direct per-feed
+      fetches; verified: worker off, all data still flows.
+- [x] Verification: zero recurring main-thread feed fetches in the network log
+      (worker owns /api/live); layer counts via bridge (subway 280 trips, buses 580,
+      citibike 2,418, traffic 54 links; ferries 0 + flights 10 = overnight reality);
+      timeline scrub in ("past") / out ("live") clean; weather chip live; no module
+      errors.
+- [ ] OPTIONAL follow-ups: subway stop-list trim + citibike static/live split
+      (bandwidth only, now that parsing is off-thread); fold `/api/traffic-local`
+      (live E-ZPass poll) into `/api/live`.
 
 **Specific verification per module:** entity counts match the old path (±poll
 timing); dead-reckoning smooth (no teleports over 2 min); stale-eviction still works
