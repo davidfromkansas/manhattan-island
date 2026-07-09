@@ -6,6 +6,85 @@ the rules on adding entries.
 
 ---
 
+## 🚗 The ambient cars drive at measured speeds
+
+**Shipped:** July 9, 2026
+
+**TL;DR:** The simulated cars now pace themselves against real speed data — and on
+the highways and bus corridors that data is LIVE. A jam forming on the FDR right
+now slows the cars on it within about a minute; a replayed past day drives the
+cars at that day's measured speeds, hour by hour.
+
+**What you'll see:**
+- **Live, right now:** cars on the FDR, West Side Highway, BQE, Bruckner and the
+  bridges follow the real-time DOT sensor readings (refreshed every minute), and
+  cars on any street where buses are currently moving follow the live bus-probe
+  estimate — real congestion appears in the simulation as it happens.
+- **Typical for the hour** on the E-ZPass local links: fly low over Midtown at
+  3 PM and the cars on 6th Ave inch along under the red speed ribbon while a green
+  avenue nearby moves freely. At night, jammed blocks read as walls of red brake
+  lights.
+- Scrub the timeline into a past day and drag through its hours: the same street's
+  cars crawl at the measured 4 mph afternoon and open up at the measured 16 mph
+  overnight. Return to live and live speeds resume.
+- Side streets with no sensor coverage behave exactly as before — the synthetic
+  flow character is unchanged where there's no data to obey.
+
+**How it works:** the traffic module fuses its three speed sources into a 150 m
+grid — live bus-probe estimates take priority over live DOT highway sensors, which
+take priority over the E-ZPass typical-for-this-hour profiles — and the ambient-
+traffic simulation looks up that field as cars cross street segments, scaling each
+car's speed against what's typical for its road class (and feeding the same factor
+into its brake lights). The lookup is one map read per car every ~32 simulation
+ticks, measured at +0.006 ms/frame — the mobile-performance budget is untouched.
+Honest caveats: only instrumented streets (roughly 60 highway links, ~290 E-ZPass
+locals, and whatever streets buses recently traversed) are data-driven; a grid
+cell straddling an avenue can bleed its speed onto the ends of adjacent cross
+streets; car speeds are clamped to 15–130% of road-class typical so the scene
+never looks broken by an outlier reading.
+
+---
+
+## 🗣️ Ask the Concierge about street speeds — by street, hour, day, or neighborhood
+
+**Shipped:** July 9, 2026
+
+**TL;DR:** The City Concierge now reads the local street-speed data. "What's the
+slowest street in the West Village right now?", "when is 6th Avenue worst?", "how
+was traffic last Friday at 5 PM?", and "is traffic worse than usual?" all get
+real, attributed answers — and any feed can now be filtered by neighborhood.
+
+**What you'll see:**
+- "Slowest local street in the West Village right now" → "14th Street eastbound
+  (11th Ave to 7th Ave), about 5 mph — typical for 3 PM based on E-ZPass reader
+  data published yesterday, not a live reading," with the streets pinned on the
+  map.
+- "When is 6th Ave worst?" reads the street's 24-hour curve: worst at 11 AM at
+  2.7 mph, easing to 16–17 mph overnight.
+- "How was 6th Avenue last Friday at 5 PM?" pulls that actual day from the archive
+  (which reaches back years, unlike the 7-day city snapshots).
+- "Is traffic worse than usual right now?" compares the live highway sensors and
+  nearby buses against the typical-for-this-hour numbers and quantifies the gap.
+- Neighborhood filtering works on every feed: "Citi Bike stations in Williamsburg"
+  scopes to the real NTA boundary, not a radius guess.
+- Street names are forgiving: "Avenue of the Americas", "sixth avenue", and
+  "6 Ave" all resolve to the same 6th Avenue readings.
+
+**How it works:** a new `traffic_local` feed exposes the E-ZPass dataset (see its
+own entry below) to the agent as per-link speeds evaluated at any wall-clock hour
+of any published day, with the full 24-hour profile attached when a question
+narrows to a few streets; a generic `area` parameter filters any feed's rows
+point-in-polygon against the official borough/NTA boundaries. The agent's
+instructions require it to attribute every number to its provenance — live
+sensor, live bus average, or "typical for this hour (published <day>)" — and its
+clock is now injected per-request, so "yesterday" and "last Friday" resolve to
+real dates instead of the model's guess. Honest caveats: the E-ZPass numbers lag
+~2 days (the agent says so); the only truly live local-street signal is the
+average speed of nearby buses, which excludes their stopped time and so reads a
+little high.
+
+---
+
 ## ☁️ Puffy Ghibli clouds
 
 **Shipped:** July 9, 2026
@@ -193,6 +272,52 @@ per visitor (8 messages/min, 60/day) to bound costs.
 
 ---
 
+## 🛣️ Local street speeds — E-ZPass readers + live bus probes
+
+**Shipped:** July 7, 2026
+
+**TL;DR:** Measured speeds arrive on NORMAL streets, not just highways: ~290
+E-ZPass reader links (137 in Manhattan) paint hourly median speeds onto the
+street grid, and the live bus fleet doubles as a real-time speed probe for
+whatever street it's moving down.
+
+**What you'll see:**
+- Narrow speed ribbons on local streets — 6th Ave, 57th St, Roosevelt Ave —
+  colored on a local scale (green ≥ 18 mph, red ≤ 4; Manhattan locals live in a
+  slower world than the highway scale). Chips declare exactly what you're seeing:
+  "57th St west · 4 mph · E-ZPass 07-08 · 15:00".
+- The ribbons recolor with the clock: drag the time slider through a replayed day
+  and watch the Midtown grid fill through the morning rush at that day's actual
+  measured speeds. In Live mode the colors show what's typical for the current
+  hour from the latest published day (the chip names it).
+- A second, thinner set of ribbons appears wherever ≥2 buses moved down a street
+  in the last 10 minutes — a genuinely live estimate, labeled "~7 mph moving ·
+  3 live buses". These are live-only and clear during time-travel.
+- Streets with no reading for the viewed hour simply have no ribbon — nothing is
+  interpolated or invented.
+
+**How it works:** NYC DOT operates E-ZPass readers on local streets (the
+Midtown-in-Motion program) and publishes rolling median link speeds to the open
+data portal ([current dataset](https://data.cityofnewyork.us/Transportation/EZ-Pass-Readers-July-2024-current/6a2s-2t65),
+[2021–2024 archive](https://data.cityofnewyork.us/Transportation/EZ-Pass-Readers-2021-July-2024/erdf-2akx));
+the backend aggregates each published day into per-link 24-hour profiles with one
+query, and the client colors each link by the profile hour matching the viewed
+wall clock. The catch, stated everywhere it appears: the dataset lands in daily
+batches ~2 days behind, so in Live mode this layer is a *recent-typical* baseline,
+not a live reading — which is exactly why the bus-probe layer exists. Bus probes
+reuse the live MTA fleet the scene already renders: every moving bus is
+map-matched to its street edge, and edges with two or more distinct buses in a
+rolling 10-minute window get an averaged speed. Honest caveats: bus speeds
+exclude stopped/dwell time, so probes read a bit above door-to-door reality;
+timeline replays of published days show that day's real measurements, but a day
+inside the publication lag falls back to the latest available (the chip names the
+day shown); tunnel segments are never painted.
+
+*Data: NYC DOT E-ZPass traffic speed readers via NYC Open Data; MTA Bus Time
+vehicle positions.*
+
+---
+
 ## 🐦 Live bird migration (BirdCast radar), citywide
 
 **Shipped:** July 7, 2026
@@ -238,3 +363,41 @@ and the percentile ranking.
 
 *Data credit: BirdCast — Cornell Lab of Ornithology / Colorado State University /
 UMass Amherst.*
+
+---
+
+## 🚦 Live traffic — highway speeds + incidents on the streets they belong to
+
+**Shipped:** July 7, 2026
+
+**TL;DR:** Real-time NYC DOT sensor speeds painted as colored ribbons on the
+highways they measure — FDR, West Side Highway, BQE, Bruckner, the bridges — plus
+live 511NY incidents and closures as clickable markers.
+
+**What you'll see:**
+- Wide ribbons riding the arterial highways, green → amber → red by measured mph,
+  refreshed every minute. The FDR ribbon rides the elevated viaduct; bridge
+  ribbons climb the actual decks; tunnel segments are gapped — nothing is ever
+  painted on the river.
+- Warning triangles for live traffic events: red = accidents/incidents, amber =
+  closures. Chips carry the road name, live mph and travel time ("FDR N 25th–63rd
+  · 12 mph · 3 min") or the event description.
+- Scrub the timeline into a recorded day and the ribbons recolor to that day's
+  recorded speeds; sensors that weren't reporting that day disappear rather than
+  showing today's colors.
+
+**How it works:** speeds come from the NYC DOT/TRANSCOM real-time feed
+([DOT Traffic Speeds on NYC Open Data](https://data.cityofnewyork.us/Transportation/DOT-Traffic-Speeds/i4gi-tjb9),
+with the direct `linkdata.nyctmc.org` export as the primary source), decoded and
+filtered server-side — dead sensors report telltale 1978 timestamps and are
+dropped, and each link's geometry is snapped onto the baked street graph with
+heading agreement. Events come from [511 New York](https://511ny.org/)'s public
+events API, trimmed to genuine incidents and closures (511NY files standing
+truck-restriction notices as "incidents"; Midtown alone has dozens, and they're
+filtered out so real events surface). Daily snapshots record both, which is what
+powers the timeline recolor. Honest caveats: DOT only instruments arterial
+highways — about 60 usable links citywide, so local streets have no live sensor
+coverage (see the E-ZPass entry for what fills that gap); each reading is a
+median over a whole link, not a point measurement.
+
+*Data: NYC DOT real-time traffic speeds; 511NY (NYSDOT) traffic events.*
