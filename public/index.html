@@ -71,12 +71,12 @@
   body.camlock #lockbtn { background:rgba(232,165,88,.75); border-color:rgba(255,220,160,.8); }
   body.photo #lockbtn { display:none; }
   body.photo #joy { display:none; }
-  #camview { position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:40; display:none; font:11px system-ui,-apple-system,sans-serif; }
+  #camview { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:40; display:none; font:11px system-ui,-apple-system,sans-serif; } /* dead-center of the screen */
   #camview .ring { /* squared card at the feed's native aspect — the full frame, no crop */
-    width:min(389px, 92vw); border-radius:12px; overflow:hidden; position:relative;
+    width:min(447px, 92vw); border-radius:12px; overflow:hidden; position:relative;
     border:2px solid rgba(120,220,255,.55); box-shadow:0 8px 34px rgba(0,0,0,.55); background:#000;
   }
-  #camview img { width:100%; height:auto; min-height:149px; object-fit:contain; display:block; }
+  #camview img { width:100%; height:auto; min-height:171px; object-fit:contain; display:block; }
   #camview .live {
     position:absolute; top:12px; left:50%; transform:translateX(-50%);
     background:rgba(205,32,44,.92); color:#fff; font-weight:700; font-size:10px;
@@ -90,7 +90,7 @@
     font:12px system-ui; cursor:pointer; line-height:22px; text-align:center; padding:0;
   }
   #camview .name {
-    margin:7px auto 0; text-align:center; color:rgba(255,255,255,.92); max-width:389px;
+    margin:7px auto 0; text-align:center; color:rgba(255,255,255,.92); max-width:447px;
     background:rgba(10,13,20,.6); border:1px solid rgba(255,255,255,.1); border-radius:10px;
     padding:4px 10px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
   }
@@ -492,8 +492,8 @@
     <rect x="2" y="38" width="116" height="44" rx="14" fill="url(#cdM)"/>
     <rect x="43" y="7" width="34" height="106" rx="11" fill="#141f3f"/>
     <rect x="7" y="43" width="106" height="34" rx="11" fill="#141f3f"/>
-    <rect class="db" data-act="zi" x="46" y="10" width="28" height="34" rx="9"><title>zoom in</title></rect>
-    <rect class="db" data-act="zo" x="46" y="76" width="28" height="34" rx="9"><title>zoom out</title></rect>
+    <rect class="db" data-act="zi" x="46" y="10" width="28" height="34" rx="9"><title>move forward</title></rect>
+    <rect class="db" data-act="zo" x="46" y="76" width="28" height="34" rx="9"><title>move backward</title></rect>
     <rect class="db" data-act="pl" x="10" y="46" width="34" height="28" rx="9"><title>move left</title></rect>
     <rect class="db" data-act="pr" x="76" y="46" width="34" height="28" rx="9"><title>move right</title></rect>
     <g class="ic" fill="#dfe9ff" stroke="none">
@@ -4351,42 +4351,60 @@ renderer.domElement.addEventListener('wheel', () => { camTween = null; }, { pass
 {
   const _doff = new THREE.Vector3();
   let dialAct = null, dialT = 0, dialRaf = 0;
+  const DIAL_RATE = 0.7; // ONE shared speed (moderately fast): rad/s for turns, ×distance/s
+  // for slides, /s exponential for zoom — all sweep the same angular screen speed
   function dialStep(dt) {
     camTween = null;
     const t = controls.target;
     _doff.copy(camera.position).sub(t);
     if (dialAct === 'zi' || dialAct === 'zo') {
-      const k = Math.exp((dialAct === 'zi' ? -0.575 : 0.575) * dt);
-      _doff.setLength(clamp(_doff.length() * k, controls.minDistance, controls.maxDistance));
-      camera.position.copy(t).add(_doff);
+      // ▲/▼ arrows (legacy act names from their zoom days): walk forward/back along
+      // the look direction's ground projection — camera + target together, height locked
+      const n = Math.hypot(_doff.x, _doff.z) || 1;
+      const s = (dialAct === 'zi' ? 1 : -1) * Math.max(_doff.length() * DIAL_RATE, 25) * dt;
+      const fx = -_doff.x / n * s, fz = -_doff.z / n * s; // -_doff = camera → target
+      camera.position.x += fx; camera.position.z += fz;
+      t.x += fx; t.z += fz;
     } else if (dialAct === 'rl' || dialAct === 'rr') {
-      // mirrored presentation (scaleX(-1)): screen-left orbit = positive azimuth here
-      const a = (dialAct === 'rl' ? 1 : -1) * 0.525 * dt;
+      // yaw IN PLACE: swing the TARGET around the camera — rotate the viewer where
+      // they stand, never slide them. (Orbiting a distant target read as translation.)
+      // mirrored presentation (scaleX(-1)): same screen turn sense as before.
+      const a = (dialAct === 'rl' ? 1 : -1) * DIAL_RATE * dt;
       const c = Math.cos(a), s = Math.sin(a);
-      const x = _doff.x * c - _doff.z * s, z = _doff.x * s + _doff.z * c;
-      _doff.x = x; _doff.z = z;
-      camera.position.copy(t).add(_doff);
+      const vx = -_doff.x, vz = -_doff.z; // camera → target
+      t.x = camera.position.x + vx * c - vz * s;
+      t.z = camera.position.z + vx * s + vz * c;
     } else if (dialAct === 'eu' || dialAct === 'ed') {
-      // vertical slide: camera + target together, so the view translates straight up/down
-      const v = Math.max(_doff.length() * 0.3, 20) * (dialAct === 'eu' ? 1 : -1) * dt;
+      // +/− center buttons: vertical elevation — camera + target rise/descend
+      // together at the shared rate, view direction held (zoom stays on the wheel)
+      const v = (dialAct === 'eu' ? 1 : -1) * Math.max(_doff.length() * DIAL_RATE, 25) * dt;
       const ny = clamp(camera.position.y + v, 6, 26000);
       t.y += ny - camera.position.y;
       camera.position.y = ny;
     } else if (dialAct === 'pl' || dialAct === 'pr') {
       // lateral slide: camera + target along screen-right (mirror-corrected)
       const n = Math.hypot(_doff.x, _doff.z) || 1;
-      const s = (dialAct === 'pr' ? 1 : -1) * Math.max(_doff.length() * 0.275, 20) * dt;
+      const s = (dialAct === 'pr' ? 1 : -1) * Math.max(_doff.length() * DIAL_RATE, 25) * dt;
       const rx = -_doff.z / n * s, rz = _doff.x / n * s;
       camera.position.x += rx; camera.position.z += rz;
       t.x += rx; t.z += rz;
     } else if (dialAct === 'ro' || dialAct === 'ru') {
-      // vertical orbit: swing over (bird's-eye) / under (street level) around the target
-      const r = _doff.length();
-      const theta = Math.atan2(_doff.x, _doff.z);
-      let phi = Math.acos(clamp(_doff.y / r, -1, 1)); // 0 = straight overhead
-      phi = clamp(phi + (dialAct === 'ro' ? -1 : 1) * 0.525 * dt, 0.05, controls.maxPolarAngle);
-      _doff.set(Math.sin(phi) * Math.sin(theta), Math.cos(phi), Math.sin(phi) * Math.cos(theta)).multiplyScalar(r);
-      camera.position.copy(t).add(_doff);
+      // pitch IN PLACE: tilt the look direction over (toward the ground) / under (up
+      // at the sky) around the camera itself. Below the horizon the target slides in
+      // along the sight-line to rest on the ground plane, so the frame-loop's
+      // t.y >= 0 clamp never warps the turn — you end up looking AT the ground point.
+      const vx = -_doff.x, vy = -_doff.y, vz = -_doff.z; // camera → target
+      let r = Math.hypot(vx, vy, vz) || 1;
+      const theta = Math.atan2(vx, vz);
+      let phi = Math.acos(clamp(vy / r, -1, 1)); // 0 = looking straight up
+      phi = clamp(phi + (dialAct === 'ro' ? 1 : -1) * DIAL_RATE * dt, 0.06, 3.08);
+      const cy = Math.cos(phi);
+      if (cy < -0.001) r = Math.min(r, (camera.position.y - 1.9) / -cy);      // rest on the ground plane
+      else if (cy > 0.001) r = Math.min(r, Math.max((6480 - camera.position.y) / cy, 30)); // stay under the t.y cloud cap
+      r = Math.max(r, 30);
+      t.set(camera.position.x + Math.sin(phi) * Math.sin(theta) * r,
+            camera.position.y + cy * r,
+            camera.position.z + Math.sin(phi) * Math.cos(theta) * r);
     }
     controls.update();
   }
