@@ -155,6 +155,25 @@
   @keyframes tkscroll { from { transform:translateX(0); } to { transform:translateX(-50%); } }
   body.photo #ticker, body.focusmode #ticker, body.manual #ticker { display:none !important; }
   @media (max-width: 700px) { #ticker { display:none !important; } #ui { bottom:14px; } } /* no ticker on phones → bar drops back */
+  #thoughtTicker { /* resident-thought marquee — stacked right above the headlines */
+    position:fixed; left:0; right:0; bottom:34px; z-index:9; height:30px; display:none;
+    overflow:hidden; user-select:none;
+    font:12px/30px 'Arial Rounded MT Bold','Trebuchet MS',system-ui,sans-serif;
+    background:linear-gradient(180deg,rgba(240,246,255,.66),rgba(216,230,249,.66));
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    border-top:1px solid rgba(255,255,255,.75); border-bottom:1px solid rgba(190,208,235,.45);
+  }
+  #thoughtTicker.solo { bottom:0; } /* headlines strip hidden → drop flush with the screen edge */
+  #thoughtTicker .tkin { display:inline-flex; white-space:nowrap; will-change:transform; animation:tkscroll linear infinite; }
+  #thoughtTicker:hover .tkin { animation-play-state:paused; }
+  #thoughtTicker .th { color:#17418a; cursor:pointer; padding:0 14px; }
+  #thoughtTicker .th:hover { text-decoration:underline; }
+  #thoughtTicker .th .ic { margin-right:6px; text-decoration:none; display:inline-block; }
+  #thoughtTicker .th .who { color:#7a93bb; font-size:10px; margin-left:7px; letter-spacing:.3px; }
+  #thoughtTicker i.sep { color:#9fb6da; font-style:normal; }
+  body.thticker #ui { bottom:74px; } /* the bar clears both strips while thoughts scroll */
+  body.photo #thoughtTicker, body.focusmode #thoughtTicker, body.manual #thoughtTicker { display:none !important; }
+  @media (max-width: 700px) { #thoughtTicker { display:none !important; } }
   .flbl {
     position:fixed; left:0; top:0; z-index:9; display:none; pointer-events:auto; cursor:pointer;
     font:10px/1.35 system-ui, -apple-system, sans-serif; color:rgba(255,255,255,.85);
@@ -449,6 +468,7 @@
 </div>
 <div id="vitals"></div>
 <div id="ticker"><div class="tkin"></div></div>
+<div id="thoughtTicker"><div class="tkin"></div></div>
 <div id="rotDial"><!-- rotation module: orbit left/right, tilt over/under -->
   <svg viewBox="0 0 120 120">
     <circle cx="60" cy="60" r="58" fill="url(#cdM)"/>
@@ -7718,10 +7738,12 @@ const personas = (() => {
   const title = s => s.toLowerCase().replace(/\b[a-z]/g, ch => ch.toUpperCase());
   function open(pp) {
     // Release any active ride-along (subway/bus/plane/ferry) through its own official
-    // path before we take the camera: those follows cancel on canvas pointerdown, but a
-    // thought-bubble click is a DOM click that never reaches the canvas — without this,
-    // an in-flight follow would keep steering camTween at ITS entity and fight ours.
-    renderer.domElement.dispatchEvent(new PointerEvent('pointerdown'));
+    // path before we take the camera: those follows cancel on canvas wheel/pointerdown,
+    // but a thought-bubble/ticker click is a DOM click that never reaches the canvas —
+    // without this, an in-flight follow would keep steering camTween at ITS entity and
+    // fight ours. A zero-delta wheel releases everything with no OrbitControls pointer
+    // capture (a synthetic pointerdown made it throw setPointerCapture errors).
+    renderer.domElement.dispatchEvent(new WheelEvent('wheel', { deltaY: 0 }));
     const [, age, female, raceI, orgI, langI, eduI, occI, incK, commI, status] = pp.p;
     const occ = occI >= 0 ? title(D.occs[occI]) : ['', 'Looking For Work', 'Retired', 'Student', ''][status] || '';
     const head = (occ || 'Resident') + ', ' + age;
@@ -7754,10 +7776,23 @@ const personas = (() => {
   let follow = null; // { pp, lx, lz } — last person pos, for per-frame camera deltas
   function startFollow(pp) {
     const [px, pz] = posAt(pp);
-    let dx = camera.position.x - px, dz = camera.position.z - pz;
-    const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;   // keep the current bearing
+    const d = Math.hypot(camera.position.x - px, camera.position.z - pz) || 1;
+    // unobstructed approach: walkers pace along a STREET, so approaching down their own
+    // corridor keeps the sight-line in open air (buildings line the sides, not the view).
+    // Standers get a near-top-down angle instead — nothing clears rooftops like altitude.
+    let bx, bz, dist, alt;
+    const n = Math.hypot(pp.dx, pp.dz);
+    if (pp.spd && n > 4) {
+      bx = pp.dx / n; bz = pp.dz / n;
+      // pick the corridor end nearer the current camera bearing (smaller swing)
+      if ((camera.position.x - px) * bx + (camera.position.z - pz) * bz < 0) { bx = -bx; bz = -bz; }
+      dist = 58; alt = 30;
+    } else {
+      bx = (camera.position.x - px) / d; bz = (camera.position.z - pz) / d;
+      dist = 26; alt = 78;
+    }
     camTween = {
-      p0: camera.position.clone(), p1: new THREE.Vector3(px + dx * 62, 34, pz + dz * 62),
+      p0: camera.position.clone(), p1: new THREE.Vector3(px + bx * dist, alt, pz + bz * dist),
       t0: controls.target.clone(), t1: new THREE.Vector3(px, 5, pz),
       t: 0, dur: Math.min(Math.max(0.6 + d / 2500, 0.8), 2.2), // farther click = longer glide
     };
@@ -7800,9 +7835,17 @@ const personas = (() => {
     }
     if (best) open(best);
   });
+  // short public descriptor (the card header + a compact area) — used by the thought
+  // ticker. Full NTA names ("Soundview-Bruckner-Bronx River / …") are marquee poison.
+  function shortArea(a) { return (a || '').split(' / ')[0].split('-')[0].trim(); }
+  function who(pp) {
+    const [, age, , , , , , occI, , , status] = pp.p;
+    const occ = D && occI >= 0 ? title(D.occs[occI]) : ['', 'Looking For Work', 'Retired', 'Student', ''][status] || '';
+    return (occ || 'Resident') + ', ' + age + ' · ' + shortArea(pp.area);
+  }
   // _fig: shared voxel geometry + palettes so §25u can render a card portrait
   // of the exact same figure (colors derive from pp.ci the same way build() does).
-  return { list: PEOPLE, open, close, posAt, followTick, _fig: { GEO, SHIRTS, PANTS, SKINS, HAIRS, SHOES, EYE } };
+  return { list: PEOPLE, open, close, posAt, followTick, who, _fig: { GEO, SHIRTS, PANTS, SKINS, HAIRS, SHOES, EYE } };
 })();
 window.__personas = personas; // dev/testing hook
 
@@ -7895,7 +7938,7 @@ const thoughts = (() => {
     if (age < 28) cand.push([YOUNG, 2]);
     if (age > 64) cand.push([OLD, 2]);
     if (occI >= 0 && status === 0) cand.push([WORK, 2]);
-    if (pp.area) cand.push([['🏙️', ['quiet day in ' + pp.area, pp.area + ' is home', 'nowhere beats ' + pp.area, 'they keep changing ' + pp.area]], 1]);
+    if (pp.area) { const hood = pp.area.split(' / ')[0].split('-')[0].trim(); cand.push([['🏙️', ['quiet day in ' + hood, hood + ' is home', 'nowhere beats ' + hood, 'they keep changing ' + hood]], 1]); }
     if (!cand.length) cand.push([WORK, 1]);
     let tot = 0; for (const c of cand) tot += c[1];
     let x = rng() * tot, chosen = cand[0][0];
@@ -9287,6 +9330,58 @@ function frame() {
   }
   pollNews();
   setInterval(pollNews, 600000);
+}
+// ---- resident-thought ticker (#thoughtTicker): a marquee of what the crowd is
+// thinking, stacked right above the headlines. Thoughts come from the SAME §25t
+// generator the bubbles use (census identity + live-reactive; the Phase 2 baked
+// LLM sheet slots in automatically when it ships). Click a thought → meet that
+// resident: personas.open() glides the camera in, follows them, and opens the
+// card + voxel portrait. Live-mode only (HIST hides it, like the bubbles).
+{
+  const tk = document.getElementById('thoughtTicker'), tin = tk.querySelector('.tkin');
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let items = []; // [{ i: personas.list index, ic, t, who }]
+  let salt = 9001; // separate salt-space from the bubbles so the ticker isn't a rerun
+  function sample() {
+    const list = personas.list;
+    if (!list.length) return [];
+    const out = [], used = new Set();
+    salt++;
+    while (out.length < 24 && used.size < Math.min(list.length, 400)) {
+      const i = (Math.random() * list.length) | 0;
+      if (used.has(i)) continue;
+      used.add(i);
+      const pp = list[i];
+      const th = thoughts._make(i, pp, salt);
+      out.push({ i, ic: th.ic, t: th.t, who: personas.who(pp) });
+    }
+    return out;
+  }
+  function build() {
+    const next = sample();
+    if (!next.length) return; // personas not loaded yet — keep whatever is scrolling
+    items = next;
+    const seq = items.map((it, k) =>
+      '<span class="th" data-k="' + k + '"><span class="ic">' + it.ic + '</span>“' + esc(it.t) + '”' +
+      '<span class="who">' + esc(it.who) + '</span></span><i class="sep">✦</i>').join('');
+    tin.innerHTML = seq + seq; // doubled content: the −50% keyframe wraps seamlessly
+    tin.style.animationDuration = Math.max(60, items.length * 7) + 's';
+  }
+  tin.addEventListener('click', (e) => {
+    const el = e.target.closest('.th');
+    if (!el) return;
+    const it = items[+el.dataset.k % Math.max(items.length, 1)];
+    if (it && personas.list[it.i]) personas.open(personas.list[it.i]);
+  });
+  function vis() { // live-mode only + stack state (drop flush if headlines are hidden)
+    const on = items.length && !HIST.active;
+    tk.style.display = on ? 'block' : 'none';
+    tk.classList.toggle('solo', document.getElementById('ticker').style.display !== 'block');
+    document.body.classList.toggle('thticker', !!on);
+  }
+  const boot = setInterval(() => { if (!items.length) { build(); vis(); } else clearInterval(boot); }, 2500);
+  setInterval(build, 180000); // fresh crowd sample every 3 min
+  setInterval(vis, 2000);
 }
 frame();
 </script>
