@@ -420,30 +420,17 @@
 </head>
 <body>
 <div id="ui">
-  <div class="grp" id="presets">
-    <button data-p="hero" title="Full island (0)">Island</button>
-    <button data-p="downtown" title="Downtown harbor (2)">Harbor</button>
-    <button data-p="canyon" title="Midtown canyon dive (3)">Canyon</button>
-    <button data-p="park" title="Central Park (4)">Park</button>
-    <button data-p="bridges" title="East River bridges (5)">Bridges</button>
-    <button data-p="gwb" title="George Washington Bridge (6)">GWB</button>
-    <button data-p="birds" title="Bird migration — live BirdCast radar (7)">Birds</button>
+  <div class="grp" id="presets"><!-- live-entity ride-alongs (camera presets stay on keys 0-6) -->
+    <button data-e="air" title="Ride along with a live aircraft">✈️ Air</button>
+    <button data-e="subway" title="Ride along with a live train">🚇 Subways</button>
+    <button data-e="ferry" title="Ride along with a live NYC Ferry">⛴️ Ferries</button>
+    <button data-e="bus" title="Ride along with a live MTA bus">🚌 Buses</button>
+    <button data-e="bike" title="Visit a live Citi Bike station">🚲 Citi Bikes</button>
+    <button data-e="cam" title="Watch a live NYC traffic camera">📷 Traffic Cam</button>
+    <button data-e="birds" title="Ride with a radar migration flock">🐦 Birds</button>
   </div>
   <div class="sep"></div>
-  <div class="grp">
-    <select id="light" title="Light mode (L cycles)">
-      <option value="live" selected>Live NYC</option>
-      <option value="golden">Golden hour</option>
-      <option value="noon">Clear noon</option>
-      <option value="dusk">Dusk</option>
-    </select>
-    <label title="Street traffic density">&#128663;<input id="traffic" type="range" min="0" max="1.5" step="0.05" value="1"></label>
-    <select id="quality" title="Quality">
-      <option value="low">Low</option>
-      <option value="medium">Medium</option>
-      <option value="high" selected>High</option>
-      <option value="ultra">Ultra</option>
-    </select>
+  <div class="grp"><!-- light mode stays on the L key; quality auto-tiers (hash q= overrides) -->
     <button id="photo" title="Photo mode (P)">&#128247;</button>
   </div>
 </div>
@@ -4438,6 +4425,7 @@ renderer.domElement.addEventListener('wheel', () => { camTween = null; }, { pass
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       try { b.setPointerCapture(e.pointerId); } catch (_) {}
+      autoPan.stop(); // dial press = the user taking the camera
       dialAct = b.dataset.act; dialT = performance.now();
       dialStep(0.07); // the click nudge; holding keeps going from here
       cancelAnimationFrame(dialRaf);
@@ -4477,20 +4465,94 @@ function applyQuality(name) {
   if (refreshFXHook) refreshFXHook();
 }
 function applyDensities() {
-  traffic.setDensity(parseFloat(ui.traffic.value) * qual.tK);
+  traffic.setDensity(qual.tK); // density slider removed — default factor 1.0 × quality tier
 }
 // UI wiring
 const ui = {
-  traffic: document.getElementById('traffic'),
-  light: document.getElementById('light'), quality: document.getElementById('quality'),
   photo: document.getElementById('photo'), hint: document.getElementById('hint'), dbg: document.getElementById('dbg')
 };
-document.querySelectorAll('#presets button').forEach(b => b.addEventListener('click', () => flyTo(b.dataset.p)));
-ui.traffic.addEventListener('input', applyDensities);
-ui.quality.addEventListener('change', () => applyQuality(ui.quality.value));
+// ---- intro auto-pan: a slow orbit of Manhattan (mid altitude — close enough for
+// detail, far enough for the skyline). Runs on first visit and when the 📷 toolbar
+// button restarts it; ANY user camera action hands control back: grab/scroll the
+// canvas, a dial press, WASD fly, or anything that sets a camTween (entity buttons,
+// preset keys, persona/chip clicks, concierge flights).
+const autoPan = (() => {
+  let on = false, az = 2.4;
+  const C = { x: -150, z: 8200 }; // mid-island anchor (Midtown-ish)
+  function start() {
+    camTween = null;
+    az = Math.atan2(camera.position.x - C.x, camera.position.z - C.z) || 2.4; // pick up from the current bearing
+    on = true;
+  }
+  function stop() { on = false; }
+  function tick(dt) {
+    if (!on) return;
+    if (camTween || fly.st.on) { stop(); return; } // someone else took the camera
+    az += dt * 0.028;                              // ~3.7 min per lap
+    const r = 3900 + Math.sin(az * 0.7) * 500;     // gentle radius/height breathing
+    const h = 1500 + Math.sin(az * 1.3) * 260;
+    camera.position.set(C.x + Math.sin(az) * r, h, C.z + Math.cos(az) * r);
+    controls.target.set(C.x, 120, C.z);
+  }
+  return { start, stop, tick, active: () => on };
+})();
+renderer.domElement.addEventListener('pointerdown', autoPan.stop);
+renderer.domElement.addEventListener('wheel', autoPan.stop, { passive: true });
+// live-entity buttons: each click jumps to a REAL plane/train/ferry/bus/station/flock
+// and rides along via that module's own tuned _fly (glide + focus chip + follow).
+// A RANDOM qualifying entity each click (nearest would re-pick what you already ride).
+// Modules are defined later in the file; references resolve at click time.
+{
+  const rand = (items, ok) => {
+    const pool = [];
+    for (const it of items) if (!ok || ok(it)) pool.push(it);
+    return pool.length ? pool[(Math.random() * pool.length) | 0] : null;
+  };
+  const flyToBikeStation = (st) => {
+    setFocus('Citi Bike station (live GBFS)', st.name,
+      { station: st.name, bikes: (st.bikes || 0) + (st.ebikes || 0), docks_free: st.docks, capacity: st.cap });
+    focusui.enter(() => citibike.stations.includes(st) ? [st.x, 6, st.z] : null, '<b>🚲 ' + st.name + '</b>');
+    camTween = { p0: camera.position.clone(), t0: controls.target.clone(),
+      p1: new THREE.Vector3(st.x + 7, 46, st.z + 22), t1: new THREE.Vector3(st.x, 4, st.z), t: 0, dur: 1.9 };
+  };
+  // Manhattan first: the island is the most developed, most interesting stage. Ground
+  // entities use onLand (the Manhattan test); ferries/planes ride the water and air, so
+  // they get a Manhattan-ADJACENT band (within ~700 m of the real coastline). Each pick
+  // degrades gracefully: Manhattan+moving → Manhattan → moving → anything.
+  const inMN = (x, z) => onLand(x, z);
+  const nearMN = (x, z) => {
+    if (z < -900 || z > 21600) return false;
+    const c = coastAt(clamp(z, 0, 21000));
+    return x > c.w - 700 && x < c.e + 700;
+  };
+  const pick2 = (items, geo, moving) =>
+    rand(items, x => geo(x) && (!moving || moving(x))) || rand(items, geo) ||
+    (moving && rand(items, moving)) || rand(items);
+  const PICK = {
+    air: () => { const p = pick2(flights.list, x => nearMN(x.pos.x, x.pos.z)); if (p) flights._fly(p); },
+    subway: () => { const t = pick2([...subway.trips.values()], x => inMN(x.px, x.pz), x => !x.dwellFeed); if (t) subway._fly(t); },
+    ferry: () => { const v = pick2(ferries.list, x => nearMN(x.pos.x, x.pos.z), x => !x.docked); if (v) ferries._fly(v); },
+    bus: () => { const b = pick2(buses.list, x => inMN(x.pos.x, x.pos.z), x => x.spd > 0.4); if (b) buses._fly(b); },
+    bike: () => { const s = pick2(citibike.stations, x => inMN(x.x, x.z), x => x.on && ((x.bikes || 0) + (x.ebikes || 0)) > 0); if (s && s.on) flyToBikeStation(s); },
+    cam: () => { // glide to a Manhattan camera and pop its live viewer (auto "marker click")
+      const cm = pick2(cams.list, x => inMN(x.x, x.z));
+      if (!cm) return;
+      cams.open(cm);
+      camTween = { p0: camera.position.clone(), t0: controls.target.clone(),
+        p1: new THREE.Vector3(cm.x + 26, 42, cm.z + 52), t1: new THREE.Vector3(cm.x, 12, cm.z), t: 0, dur: 1.9 };
+    },
+    birds: () => birds._fly(),
+  };
+  document.querySelectorAll('#presets button').forEach(b =>
+    b.addEventListener('click', () => {
+      // release any active ride-along first (button clicks never reach the canvas, so
+      // a prior follow would keep steering camTween and fight the new pick)
+      renderer.domElement.dispatchEvent(new WheelEvent('wheel', { deltaY: 0 }));
+      const f = PICK[b.dataset.e]; if (f) f();
+    }));
+}
 function setMode(name) {
   modeName = name;
-  ui.light.value = name;
   document.body.classList.toggle('manual', name !== 'live');
   if (name === 'live') {
     live.activate();
@@ -4500,7 +4562,6 @@ function setMode(name) {
     paintGround(tgt);
   }
 }
-ui.light.addEventListener('change', () => setMode(ui.light.value));
 let photoMode = false;
 function togglePhoto() {
   photoMode = !photoMode;
@@ -4508,7 +4569,9 @@ function togglePhoto() {
   controls.autoRotate = photoMode;
   controls.autoRotateSpeed = 0.35;
 }
-ui.photo.addEventListener('click', togglePhoto);
+// 📷 toolbar button restarts the Manhattan auto-tour (photo mode stays on the P key)
+ui.photo.title = 'Auto-tour Manhattan (photo mode: P)';
+ui.photo.addEventListener('click', autoPan.start);
 addEventListener('keydown', (e) => {
   const K = e.key.toLowerCase();
   const pk = { '0': 'hero', '1': 'hero', '2': 'downtown', '3': 'canyon', '4': 'park', '5': 'bridges', '6': 'gwb', '7': 'birds' };
@@ -4694,8 +4757,7 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
-ui.quality.value = TIER; // auto-selected device tier (PERF.md A) — dropdown shows it and still overrides
-applyQuality(TIER);
+applyQuality(TIER); // auto-selected device tier (PERF.md A); hash q= still overrides
 
 /* ============================================================
    26b. LIVE NYC — real sun position + real weather
@@ -5679,7 +5741,7 @@ const flights = (() => {
     follow = p;
     const sp = Math.max(1, Math.hypot(p.v.x, p.v.z));
     const bx = -p.v.x / sp, bz = -p.v.z / sp; // unit "behind" direction
-    followOff.set(bx * 520 - bz * 260, 170, bz * 520 + bx * 260); // behind + lateral + up: 3/4 view
+    followOff.set(bx * 280 - bz * 140, 90, bz * 280 + bx * 140); // behind + lateral + up: close 3/4 view
     followPrev.set(p.pos.x, dispY(p.pos.y), p.pos.z);
     camTween = {
       p0: camera.position.clone(), t0: controls.target.clone(),
@@ -6146,6 +6208,7 @@ const subway = (() => {
   // chip click → fly to the beacon and ride along, flights-style
   let follow = null;
   const followPrev = new THREE.Vector3(), followOff = new THREE.Vector3();
+  const followFwd = new THREE.Vector3(0, 0, 1); // smoothed direction of travel (chase cam)
   function flyToBeacon(tr) {
     setFocus('subway train (live GTFS-rt)', tr.route + ' ' + (tr.dir || '') + (tr.dest ? ' → ' + tr.dest : ''),
       { route: tr.route, direction: tr.dir, destination: tr.dest, next_stop: tr.next || null });
@@ -6155,11 +6218,12 @@ const subway = (() => {
     followPrev.set(tr.px, 0, tr.pz);
     followOff.copy(camera.position).sub(followPrev); // approach from the camera's current bearing
     followOff.y = 0;
-    followOff.multiplyScalar(340 / Math.max(1, followOff.length()));
+    followOff.multiplyScalar(130 / Math.max(1, followOff.length()));
+    followFwd.set(-followOff.x, 0, -followOff.z).normalize(); // seed the chase heading at the glide end
     camTween = {
       p0: camera.position.clone(), t0: controls.target.clone(),
-      p1: new THREE.Vector3(tr.px + followOff.x, 190, tr.pz + followOff.z),
-      t1: new THREE.Vector3(tr.px, 70, tr.pz),
+      p1: new THREE.Vector3(tr.px + followOff.x, 78, tr.pz + followOff.z),
+      t1: new THREE.Vector3(tr.px, 52, tr.pz), // mid-pillar aim: the route bullet (~95 m) stays in frame
       t: 0, dur: 1.9
     };
   }
@@ -6270,12 +6334,16 @@ const subway = (() => {
       if (trips.get(follow.tid) !== follow) follow = null; // canceled only when the trip is dropped
       else {
         if (camTween) { // in-flight: keep steering at the gliding beacon
-          camTween.t1.set(follow.px, 70, follow.pz);
-          camTween.p1.set(follow.px + followOff.x, 190, follow.pz + followOff.z);
-        } else {        // arrived: ride along, orbit offset preserved
+          camTween.t1.set(follow.px, 52, follow.pz);
+          camTween.p1.set(follow.px + followOff.x, 78, follow.pz + followOff.z);
+        } else {        // arrived: CHASE — trail behind the train's motion, marker in frame
           const fdx = follow.px - followPrev.x, fdz = follow.pz - followPrev.z;
-          camera.position.x += fdx; camera.position.z += fdz;
-          controls.target.x += fdx; controls.target.z += fdz;
+          const fl = Math.hypot(fdx, fdz);
+          if (fl > 0.05) { followFwd.x += (fdx / fl - followFwd.x) * 0.1; followFwd.z += (fdz / fl - followFwd.z) * 0.1; followFwd.setLength(1); }
+          camera.position.x += (follow.px - followFwd.x * 130 - camera.position.x) * 0.08;
+          camera.position.y += (78 - camera.position.y) * 0.08;
+          camera.position.z += (follow.pz - followFwd.z * 130 - camera.position.z) * 0.08;
+          controls.target.set(follow.px, 52, follow.pz);
         }
         followPrev.set(follow.px, 0, follow.pz);
       }
@@ -6452,9 +6520,9 @@ const ferries = (() => {
     fyFollow = v;
     fyFollowPrev.copy(v.pos);
     fyFollowOff.copy(camera.position).sub(v.pos); fyFollowOff.y = 0;
-    fyFollowOff.multiplyScalar(320 / Math.max(1, fyFollowOff.length()));
+    fyFollowOff.multiplyScalar(170 / Math.max(1, fyFollowOff.length()));
     camTween = { p0: camera.position.clone(), t0: controls.target.clone(),
-      p1: new THREE.Vector3(v.pos.x + fyFollowOff.x, 140, v.pos.z + fyFollowOff.z),
+      p1: new THREE.Vector3(v.pos.x + fyFollowOff.x, 75, v.pos.z + fyFollowOff.z),
       t1: new THREE.Vector3(v.pos.x, 12, v.pos.z), t: 0, dur: 1.9 };
   }
   renderer.domElement.addEventListener('pointerdown', () => { fyFollow = null; });
@@ -6511,7 +6579,7 @@ const ferries = (() => {
     if (fyFollow) { // ride along, orbit offset preserved (canvas pointerdown/wheel cancels)
       if (camTween) {
         camTween.t1.set(fyFollow.pos.x, 12, fyFollow.pos.z);
-        camTween.p1.set(fyFollow.pos.x + fyFollowOff.x, 140, fyFollow.pos.z + fyFollowOff.z);
+        camTween.p1.set(fyFollow.pos.x + fyFollowOff.x, 75, fyFollow.pos.z + fyFollowOff.z);
       } else {
         const dx = fyFollow.pos.x - fyFollowPrev.x, dz = fyFollow.pos.z - fyFollowPrev.z;
         camera.position.x += dx; camera.position.z += dz;
@@ -6787,6 +6855,7 @@ const buses = (() => {
   }
   let bFollow = null;
   const bFollowPrev = new THREE.Vector3(), bFollowOff = new THREE.Vector3();
+  const bFwd = new THREE.Vector3(0, 0, 1); // smoothed direction of travel (chase cam)
   function flyToBus(v) {
     setFocus('MTA bus (live GPS)', (v.route || 'bus') + (v.dest ? ' → ' + v.dest : ''),
       { route: v.route, destination: v.dest, street: v.street, speed_mph: Math.round((v.spd || 0) * 2.237) });
@@ -6795,10 +6864,11 @@ const buses = (() => {
     bFollow = v;
     bFollowPrev.copy(v.pos);
     bFollowOff.copy(camera.position).sub(v.pos); bFollowOff.y = 0;
-    bFollowOff.multiplyScalar(180 / Math.max(1, bFollowOff.length()));
+    bFollowOff.multiplyScalar(55 / Math.max(1, bFollowOff.length()));
+    bFwd.set(-bFollowOff.x, 0, -bFollowOff.z).normalize(); // seed the chase heading at the glide end
     camTween = { p0: camera.position.clone(), t0: controls.target.clone(),
-      p1: new THREE.Vector3(v.pos.x + bFollowOff.x, 90, v.pos.z + bFollowOff.z),
-      t1: new THREE.Vector3(v.pos.x, 8, v.pos.z), t: 0, dur: 1.9 };
+      p1: new THREE.Vector3(v.pos.x + bFollowOff.x, 24, v.pos.z + bFollowOff.z),
+      t1: new THREE.Vector3(v.pos.x, 6, v.pos.z), t: 0, dur: 1.9 };
   }
   renderer.domElement.addEventListener('pointerdown', () => { bFollow = null; });
   renderer.domElement.addEventListener('wheel', () => { bFollow = null; }, { passive: true });
@@ -6862,12 +6932,16 @@ const buses = (() => {
     if (dirty) busMesh.instanceMatrix.needsUpdate = true;
     if (bFollow) {
       if (camTween) {
-        camTween.t1.set(bFollow.pos.x, 8, bFollow.pos.z);
-        camTween.p1.set(bFollow.pos.x + bFollowOff.x, 90, bFollow.pos.z + bFollowOff.z);
-      } else {
+        camTween.t1.set(bFollow.pos.x, 6, bFollow.pos.z);
+        camTween.p1.set(bFollow.pos.x + bFollowOff.x, 24, bFollow.pos.z + bFollowOff.z);
+      } else { // arrived: CHASE — trail behind the bus's motion, street-level tail
         const dx = bFollow.pos.x - bFollowPrev.x, dz = bFollow.pos.z - bFollowPrev.z;
-        camera.position.x += dx; camera.position.z += dz;
-        controls.target.x += dx; controls.target.z += dz;
+        const fl = Math.hypot(dx, dz);
+        if (fl > 0.03) { bFwd.x += (dx / fl - bFwd.x) * 0.1; bFwd.z += (dz / fl - bFwd.z) * 0.1; bFwd.setLength(1); }
+        camera.position.x += (bFollow.pos.x - bFwd.x * 55 - camera.position.x) * 0.08;
+        camera.position.y += (24 - camera.position.y) * 0.08;
+        camera.position.z += (bFollow.pos.z - bFwd.z * 55 - camera.position.z) * 0.08;
+        controls.target.set(bFollow.pos.x, 6, bFollow.pos.z);
       }
       bFollowPrev.copy(bFollow.pos);
     }
@@ -7390,7 +7464,7 @@ const birds = (() => {
     bfPrev.set(b.x, b.y, b.z);
     const P = BD[b.bo] || BD.mn;
     const fx = Math.sin(P.hd), fz = Math.cos(P.hd);
-    bfOff.set(-fx * 560 - fz * 240, 70, -fz * 560 + fx * 240); // trailing 3/4 view, slightly above
+    bfOff.set(-fx * 300 - fz * 130, 45, -fz * 300 + fx * 130); // trailing 3/4 view, close in
     camTween = { p0: camera.position.clone(), t0: controls.target.clone(),
       p1: new THREE.Vector3(b.x + bfOff.x, b.y + bfOff.y, b.z + bfOff.z),
       t1: new THREE.Vector3(b.x, b.y, b.z), t: 0, dur: 1.9 };
@@ -7521,7 +7595,16 @@ const birds = (() => {
     const bx = Math.sin(hd), bz = Math.cos(hd);
     return { p: [cx - bx * 780, cy + 40, cz - bz * 780], t: [cx + bx * 400, cy + 5, cz + bz * 400] }; // near-level: the stream crosses mid-frame
   }
-  return { update, hist, vantage, data: () => D, count: () => N };
+  // _fly: toolbar ride-along — glide in behind a rendered flock and drift with it.
+  // Prefers the Manhattan radar flock (bo 'mn'); falls back to any borough's.
+  function flyRandomFlock() {
+    if (N <= 0) return;
+    const mn = [];
+    for (let i = 0; i < N; i++) if (B[i].bo === 'mn') mn.push(B[i]);
+    const pool = mn.length ? mn : Array.from({ length: N }, (_, i) => B[i]);
+    flyToFlock(pool[(Math.random() * pool.length) | 0]);
+  }
+  return { update, hist, vantage, _fly: flyRandomFlock, data: () => D, count: () => N };
 })();
 window.__birds = birds; // dev/testing hook
 
@@ -9164,6 +9247,7 @@ function frame() {
     if (camTween.t >= 1) camTween = null;
   }
   fly.tick(dt);
+  autoPan.tick(dt); // intro Manhattan orbit (self-cancels on any user camera action)
   // street-level control boost: OrbitControls speed is distance-proportional (one
   // wheel tick ≈ 5% of the orbit radius), which reads as molasses near the ground in
   // a 28 km scene. Floor the effective zoom/pan speed once the orbit radius drops
@@ -9331,6 +9415,9 @@ function frame() {
   pollNews();
   setInterval(pollNews, 600000);
 }
+// first visit: start the Manhattan auto-tour — but never hijack a deep link that
+// pins the camera or the timeline (hash-driven screenshots/tests stay deterministic)
+if (!/cam=|tgt=|scrub=|snap/.test(location.hash)) autoPan.start();
 // ---- resident-thought ticker (#thoughtTicker): a marquee of what the crowd is
 // thinking, stacked right above the headlines. Thoughts come from the SAME §25t
 // generator the bubbles use (census identity + live-reactive; the Phase 2 baked
