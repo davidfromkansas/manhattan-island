@@ -6,6 +6,119 @@ the rules on adding entries.
 
 ---
 
+## 💓 City Vitals — a live pulse panel for the whole city
+
+**Shipped:** July 10, 2026
+
+**TL;DR:** A frosted-glass "City Vitals" panel with a scrolling heart-monitor trace,
+showing live counts from every layer at a glance — residents, road events, transit in
+motion, aircraft, bikes, cameras, road speed, and bird migration.
+
+**What you'll see:** Top-right corner, a translucent panel headed by a green ECG
+heartbeat line that scrolls like a hospital monitor. Rows update every 2 seconds:
+- **Residents** — placed personas and the population they stand in for ("9,499 personas
+  / 6.2M NYC residents").
+- **Road closures** — active closures, with incidents noted separately.
+- **Trains rolling / Buses moving / Ferries underway** — vehicles in motion over the
+  total tracked (e.g. "106 / 189 trains").
+- **Aircraft tracked** (helicopters flagged with 🚁), **Bikes available** (docked bikes /
+  dock capacity), **Traffic cams** online, **Avg road speed**, and **Birds aloft** during
+  migration.
+
+**How it works:** a pure DOM overlay that reads the in-scene state of each live module
+once every 2 seconds — no new data sources, so it also reflects history when you scrub
+the timeline. Because the transit feeds carry **no schedule-adherence data**, the panel
+never claims "on time"; it reports honest motion proxies instead — trains between
+stations vs. stopped (GTFS-RT vehicle status), buses above walking speed, ferries not
+docked. Bike totals come from the [Citi Bike GBFS feed](https://gbfs.citibikenyc.com/gbfs/gbfs.json)
+(available = every docked classic + e-bike; the "total" is dock capacity, since GBFS
+never publishes how many bikes are out riding). Bird counts are the
+[BirdCast](https://birdcast.info) radar estimate, shown with a ≈.
+
+## 🎥 On-screen camera controls
+
+**Shipped:** July 10, 2026
+
+**TL;DR:** Two click-or-hold control clusters above the concierge drive the camera — a
+rotation dial and a movement pad — so you can fly the city without a mouse drag or
+keyboard.
+
+**What you'll see:** Above the "Ask David!" concierge, a round dial and a cross-shaped
+pad. The dial's curved side arrows orbit left/right, its top/bottom wedges tilt the view
+over toward a bird's-eye or under toward street level, and its center **+/−** raises or
+lowers the camera. The pad's **▲/▼** zoom in and out; **◀/▶** slide the view laterally.
+Every button gives one nudge per click and glides continuously while held, at speeds
+that scale with how far out you are.
+
+**How it works:** a pure SVG/DOM overlay driving the existing orbit camera — zoom stays
+inside the scene's 25 m–28 km limits, tilt respects the polar clamp, elevation floors out
+above the ground. Pressing any button cancels an in-flight camera fly-to. Hidden in photo
+mode and while the concierge is open. No external data.
+
+## 🕐 Status panel, docked timeline + city radio
+
+**Shipped:** July 10, 2026
+
+**TL;DR:** The top-left weather strip is now a segmented status panel with icons, the
+7-day timeline docks directly beneath it at matching width, and a looping city-radio
+ambience plays with a speaker toggle on the panel.
+
+**What you'll see:** A glossy panel in the top-left: a clock with big local time and the
+date, a thermometer with °F, a weather glyph that tracks conditions and time of day
+(🌙 on clear nights, ⛈️ in storms), a compass with wind direction and speed, and a speaker
+button. Occasional statuses — bird-migration counts, "replaying YYYY-MM-DD", the
+sun-scrub offset, "weather offline" — appear as a footnote row only when they apply. The
+LIVE/scrub timeline sits right below at exactly the panel's width; scrubbing, the day
+ticks, and the "now" button behave exactly as before. The radio starts on at gentle
+volume; the speaker mutes it (red slash) and un-mutes it.
+
+**How it works:** the panel re-renders feeds already in the scene — the same weather/wind
+readout and [BirdCast](https://birdcast.info) migration numbers as the old strip, no new
+data. The audio is a bundled 60-second ambient loop (trimmed from an hour-long "good
+morning New Yorkers" mix down to ~1 MB) played through a looping `<audio>` element;
+browsers gate autoplay with sound, so if blocked it starts on the first click or keypress.
+Timeline logic is untouched — only its position and skin moved.
+
+## ⛴️ Only real ferries sail the rivers now
+
+**Shipped:** July 10, 2026
+
+**TL;DR:** The scripted decorative boats (fake Staten Island Ferry, tour boats, barges,
+police launches) are gone — the rivers now show only live NYC Ferry vessels.
+
+**What you'll see:** No more looping generic boats with wake trails crossing the harbor
+and rivers. The only vessels on the water are the real-time NYC Ferry boats from the live
+feed, so at off-hours the rivers can be genuinely quiet — an honest reflection of what's
+actually sailing.
+
+**How it works:** removed the entire decorative fleet and its wake system, plus the
+"river traffic density" slider that drove them. The live NYC Ferry layer (real vessel
+GPS, dead-reckoned between snapshots) is unchanged.
+
+## 🌊 No more buildings in Upper Bay
+
+**Shipped:** July 10, 2026
+
+**TL;DR:** The decorative New Jersey building fill no longer spills boxes onto the
+water — the floating buildings visible in Upper Bay near Liberty Island are gone, and
+so are the ones that overshot Jersey's far western edge into open sea.
+
+**What you'll see:** From a top-down or harbor camera near Liberty Island, the water
+between the Jersey waterfront and the Statue of Liberty is clean open bay — previously
+a scatter of isolated building boxes floated there. The Jersey shoreline reads as a
+crisp land/water edge along the whole Hudson, and the fill now also stops flush at the
+land slab's western limit instead of running past it onto the sea.
+
+**How it works:** The Jersey fill generator seeded its rows from a shoreline formula
+that diverged from the ground slab's own edge south of the Battery (where the slab
+pulls back an extra 300 m as the Hudson opens into Upper Bay), so box columns landed
+east of the land they were meant to sit on. The fill now derives its east edge from
+the slab's exact formula with a 60 m inset, and a skip gate drops any box west of the
+slab's x = −4800 far edge. Verified numerically (worst-case box jitter and rotation
+stay ≥35 m inside the slab) and visually with top-down screenshots at Liberty Island,
+the south and mid-Hudson waterfront, and the western sea edge. Purely procedural —
+no external data.
+
 ## 🎛️ On-screen camera controls
 
 **Shipped:** July 10, 2026
@@ -70,12 +183,14 @@ the real one greets ships entering the harbor.
 Liberty Island is officially part of Manhattan CD1, so she ships with the Lower
 Manhattan tile). The DCP model is a CAD curve network without a closed skin, so the
 statue was reconstructed offline: curves densified to a point cloud, voxelized at
-0.75 ft, morphologically closed, marching-cubes surfaced, smoothed, and decimated to
-~23k triangles. Positions are u16-quantized into `public/liberty.json` (~275 KB),
-lazy-fetched after scene load into a single Lambert mesh (one extra draw call; the
-material joins the cloud-shadow system). The reconstruction is honest about its
-limits: crown spikes and the face melt into the voxel closing — she reads perfectly
-at harbor scale, less so from a helicopter selfie distance.
+0.45 ft, morphologically closed (with a deep-closed inner core so curve-sparse robe
+panels read as fold shadows instead of holes), marching-cubes surfaced, smoothed, and
+decimated to ~62k triangles — then the model's exact NURBS detail surfaces (crown
+spikes, tablet, torch) are composited on top. Positions are u16-quantized into
+`public/liberty.json` (~760 KB), lazy-fetched after scene load into a single Lambert
+mesh (one extra draw call; the material joins the cloud-shadow system). The
+reconstruction is honest about its limits: the face is still a voxel suggestion —
+she reads great from the harbor, less so from a helicopter selfie distance.
 
 ## 🧑‍🤝‍🧑 Ask the Concierge who lives where (Census demographics)
 
