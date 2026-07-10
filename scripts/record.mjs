@@ -59,7 +59,7 @@ const frame = {
   ferries: (ferries?.vessels ?? []).map(v => [v.id, v.label, r5(v.lat), r5(v.lon),
     Math.round(v.heading ?? -1), Math.round((v.speedMs ?? 0) * 10) / 10, v.route || '', v.headsign || '', v.docked ? 1 : 0]),
   flights: (flights?.ac ?? []).map(a => [a.hex, a.cs, r5(a.lat), r5(a.lon),
-    Math.round(a.altM), Math.round(a.gsMs), Math.round(a.track)]),
+    Math.round(a.altM), Math.round(a.gsMs), Math.round(a.track), a.kind === 'heli' ? 'heli' : 'jet']),
   // BirdCast (Cornell Lab) radar migration over Manhattan
   birds: birds && typeof birds.aloft === 'number' ? { aloft: birds.aloft, dirDeg: birds.dirDeg,
     speedMs: birds.speedMs, hMeanM: birds.hMeanM, hMaxM: birds.hMaxM, night: !!birds.night, t: birds.t,
@@ -72,7 +72,7 @@ const frame = {
     buses: 'id,route,lat,lon,bearing,speedMs,dest',
     bikes: 'stationId,bikes,ebikes,docks,on',
     ferries: 'id,label,lat,lon,heading,speedMs,route,headsign,docked',
-    flights: 'hex,callsign,lat,lon,altM,gsMs,track',
+    flights: 'hex,callsign,lat,lon,altM,gsMs,track,kind',
     traffic: 'linkId,speedMph,travelTimeS',
     trafficEvents: 'id,kind,severity,road,direction,lat,lon,desc'
   }
