@@ -41,18 +41,49 @@ lowest income).
 
 ---
 
-## 🧍 Meet the residents — 7,261 clickable Census personas on the streets
+## 🚶 Residents walk the streets
+
+**Shipped:** July 9, 2026 (updated)
+
+**TL;DR:** The 9,499 Census personas now continuously walk along their
+neighborhood streets — arms and legs swing, heads face the direction of travel,
+all driven by the scene clock via shader. Zero per-frame CPU cost.
+
+**What you'll see:**
+- From street level, residents pace back and forth along real sidewalk-offset
+  stretches of ground streets (no bridges, tunnels, or highways). Legs split
+  mid-stride, arms swing in opposition, subtle stride bob while they walk. From
+  altitude they're small; at street level they're sized to read clearly.
+- On Manhattan, the crowd grew from ~224 to 2,454 after a placement bug fix (the
+  predicate was checking only borough land, rejecting the entire island). Now
+  crowds are visible everywhere: Midtown, Upper West Side, Harlem, Lower East Side.
+
+**How it works:** shader-side walk cycle — position, yaw (facing), limb swing, and
+stride bob all derive from `uTime` (scene clock) + two per-instance attributes
+per person (walk segment endpoints + phase/speed). The placement loop now snaps
+each person to their nearest ground street, offset from the edge by a sidewalk
+margin, and samples 9 interior points to ensure the entire path stays on land
+(no water crossings). **The fix:** placement predicate changed from `landOK()`
+alone (borough-side only) to `onLand() || landOK()` (island OR boroughs), which
+is the same combo the traffic sim uses. All 9,499 people placed; 8,649 walk
+(the rest failed street-snapping and stand still). No performance cost beyond the
+module load — geometry, draw calls, and fps unchanged.
+
+---
+
+## 🧍 Meet the residents — 9,499 clickable Census personas on the streets
 
 **Shipped:** July 9, 2026
 
-**TL;DR:** Little cartoon New Yorkers now stand throughout the city — each one a
+**TL;DR:** Little cartoon New Yorkers now walk throughout the city — each one a
 real, anonymous Census respondent placed in their own community district. Click one
 to read who they are; the crowd's makeup matches the city's actual demographics.
 
 **What you'll see:**
 - Small voxel New Yorkers — big-headed low-poly figures with eyes, varied hair
   styles and bright outfits — dot the sidewalks and blocks, visible from browsing
-  altitude and sharper as you descend (buildings hide and reveal them as you move). Click one → a card:
+  altitude and sharper as you descend (buildings hide and reveal them as you move).
+  Most are walking; some stand still on streets with no good route. Click one → a card:
   "Medical Assistants, 49 — she lives in the Pelham Parkway / Morris Park (Bronx)
   area — Hispanic/Latino, born in the Dominican Republic. Speaks Spanish at home.
   High school graduate. Personal income ≈ $65k/yr. Commutes by bus or rail." Every
@@ -74,8 +105,8 @@ three hair styles), scaled up gently with distance so people stay findable from
 altitude. **Honest caveats:** these are real anonymized microdata records, not
 named individuals — no names are invented; the characters' looks (skin, hair,
 clothes) are RANDOM by design and never encode demographics — the data lives only
-in the card; 7,261 of 12,703 sampled records appear because personas only stand
-where the twin has built land (Staten Island and the city's far edges are
+in the card; 9,499 of 12,703 sampled records appear because personas only stand
+where the twin has built land (Queens' far east and Staten Island are
 under-represented visually — the Concierge's polling numbers remain complete and
 unaffected).
 

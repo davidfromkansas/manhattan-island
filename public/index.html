@@ -178,23 +178,25 @@
     border-radius:6px; padding:1px 7px;
   }
   body.photo #chip, body.manual #chip, body.photo #scrub, body.manual #scrub { opacity:0; pointer-events:none; }
-  #agentFab {
-    position:fixed; right:14px; bottom:14px; z-index:31; width:40px; height:40px;
-    border-radius:50%; font:17px system-ui; line-height:38px; text-align:center; padding:0; cursor:pointer;
-    color:rgba(255,255,255,.9); background:rgba(10,13,20,.55); border:1px solid rgba(140,190,255,.3);
-    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); transition:opacity .4s;
+  #agentFab { /* the concierge persona — portrait + "Talk to me!" pill (public/concierge-*.png) */
+    position:fixed; right:12px; bottom:8px; z-index:31; width:128px; cursor:pointer;
+    padding:0; border:none; background:none; transition:opacity .4s, transform .25s;
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,.5));
   }
-  #agentFab:hover { background:rgba(25,45,70,.78); border-color:rgba(140,190,255,.5); }
-  #agentPanel {
-    position:fixed; right:14px; bottom:62px; z-index:31; width:min(320px, 88vw);
+  #agentFab img { display:block; width:100%; pointer-events:none; }
+  #agentFab img.talk { position:absolute; left:14%; bottom:18%; width:72%; } /* pill overlaps his chest, per the source art */
+  #agentFab:hover { transform:scale(1.05) translateY(-2px); }
+  @media (max-width: 600px) { #agentFab { width:92px; right:8px; bottom:52px; } } /* clear the mobile control bar */
+  #agentPanel { /* full-height side panel, glass over the scene */
+    position:fixed; right:0; top:0; bottom:0; z-index:31; width:min(380px, 88vw);
     display:none; flex-direction:column; gap:6px;
     font:11px/1.45 system-ui, -apple-system, sans-serif; color:rgba(255,255,255,.88);
     background:rgba(10,13,20,.72); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
-    border:1px solid rgba(140,190,255,.18); border-radius:12px; padding:8px;
+    border-left:1px solid rgba(140,190,255,.18); padding:10px;
   }
   body.agent #agentPanel { display:flex; }
-  body.agent #agentFab { background:rgba(232,165,88,.4); border-color:rgba(255,220,160,.55); }
-  #agentLog { max-height:36vh; overflow-y:auto; display:flex; flex-direction:column; gap:5px; scrollbar-width:thin; }
+  body.agent #agentFab { display:none; } /* the panel owns the corner while open; ✕ closes */
+  #agentLog { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:5px; scrollbar-width:thin; }
   #agentLog .m { border-radius:9px; padding:4px 8px; max-width:92%; white-space:pre-wrap; word-wrap:break-word; }
   #agentLog .m.me { align-self:flex-end; background:rgba(232,165,88,.18); border:1px solid rgba(232,165,88,.25); }
   #agentLog .m.ai { align-self:flex-start; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.09); }
@@ -314,9 +316,12 @@
   </div>
   <button id="timeReset" title="Back to now">now</button>
 </div>
-<button id="agentFab" title="City Concierge — ask about live NYC, or say where to fly">✦</button>
+<button id="agentFab" title="City Concierge — ask about live NYC, or say where to fly">
+  <img src="concierge-portrait.png" alt="City Concierge">
+  <img src="concierge-talk.png" class="talk" alt="Talk to me!">
+</button>
 <div id="agentPanel">
-  <div id="agentHead"><b>City Concierge ✦</b><span id="agentLayerChip" title="clear this layer"></span><button id="agentInfoBtn" title="what can I ask?">ⓘ</button></div>
+  <div id="agentHead"><b>City Concierge ✦</b><span id="agentLayerChip" title="clear this layer"></span><button id="agentInfoBtn" title="what can I ask?">ⓘ</button><button id="agentCloseBtn" title="close">✕</button></div>
   <div id="agentUses"></div>
   <div id="agentLog"></div>
   <form id="agentForm"><input id="agentIn" type="text" maxlength="300" placeholder="Ask the city… “show me Times Square”" autocomplete="off"><button type="submit" title="send">➤</button></form>
@@ -7212,34 +7217,73 @@ const personas = (() => {
   const HAIRS = ['#2b2320', '#6b4423', '#e8a13d', '#ff5a2e', '#c9c2b8', '#3a3f4a', '#e8d23d', '#7a4a8e'].map(c => new THREE.Color(c));
   const SHOES = ['#3a2e26', '#20242c', '#c9463a', '#e8e4da', '#274a6d', '#6b4423'].map(c => new THREE.Color(c));
   const EYE = new THREE.Color('#20242c');
-  // shared material: Lambert + slight emissive (night) + shader-side distance scale from the feet
-  const pMat = new THREE.MeshLambertMaterial({ emissive: 0x9aa4b8, emissiveIntensity: 0.14 });
-  pMat.customProgramCacheKey = () => 'voxpeople';
-  pMat.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', `
-      vec3 iOrigin = (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz;
-      float pk = clamp(distance(iOrigin, cameraPosition) / 900.0, 1.0, 4.0);
-      transformed *= pk; // grow from the feet with distance — findable, planes-style
-      #include <project_vertex>`);
+  // material family: Lambert + slight emissive (night) + FULLY shader-side walk cycle.
+  // Position, yaw, limb swing and distance-grow all derive from uTime + per-instance
+  // segment attributes (iSeg = pace-path A/D, iWalk = phase/speed), so 7k walkers cost
+  // zero per-frame CPU and zero matrix uploads (instanceMatrix stays static, SCALE-ONLY —
+  // translation/rotation live in the shader; people do NOT cast/receive shadows, which is
+  // what makes replacing project_vertex wholesale safe).
+  // mode: 0 rigid (eyes/hair) · 1 hands (skin, y<3) · 2 arms (shirt, |x|>1.14) · 3 legs+shoes
+  const mkWalkMat = (mode) => {
+    const m = new THREE.MeshLambertMaterial({ emissive: 0x9aa4b8, emissiveIntensity: 0.14 });
+    m.customProgramCacheKey = () => 'voxwalk' + mode;
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uTime = cityUniforms.uTime;
+      const swing = mode === 0 ? '' : `
+          ${mode === 1 ? 'if (transformed.y < 3.0) {' : mode === 2 ? 'if (abs(transformed.x) > 1.14) {' : '{'}
+            float wA = ${mode === 3 ? '-' : ''}walkSw * sign(transformed.x);
+            float wC = cos(wA), wS = sin(wA), wP = ${mode === 3 ? '2.35' : '4.65'};
+            float wY = transformed.y - wP;
+            transformed.y = wP + wC * wY - wS * transformed.z;
+            transformed.z = wS * wY + wC * transformed.z;
+          }`;
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', `#include <common>
+          attribute vec4 iSeg; attribute vec2 iWalk; uniform float uTime;`)
+        .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+          float wLen = max(length(iSeg.zw), 0.001);
+          float wU = iWalk.y > 0.0 ? fract(uTime * iWalk.y / (2.0 * wLen) + iWalk.x) : 0.25;
+          float wTri = 1.0 - abs(2.0 * wU - 1.0);          // ping-pong A→B→A along the path
+          vec3 walkOrg = vec3(iSeg.x + iSeg.z * wTri, 1.1, iSeg.y + iSeg.w * wTri);
+          vec2 walkFwd = (wU < 0.5 ? 1.0 : -1.0) * iSeg.zw / wLen;
+          float walkSw = iWalk.y > 0.0 ? sin(uTime * iWalk.y * 1.8 + iWalk.x * 6.2832) * 0.55 : 0.0;
+          objectNormal = vec3(walkFwd.y * objectNormal.x + walkFwd.x * objectNormal.z,
+            objectNormal.y, -walkFwd.x * objectNormal.x + walkFwd.y * objectNormal.z);`)
+        .replace('#include <begin_vertex>', `#include <begin_vertex>${swing}`)
+        .replace('#include <project_vertex>', `
+          transformed = (instanceMatrix * vec4(transformed, 1.0)).xyz;   // scale only
+          transformed = vec3(walkFwd.y * transformed.x + walkFwd.x * transformed.z,
+            transformed.y + 0.18 * abs(walkSw),                          // stride bob
+            -walkFwd.x * transformed.x + walkFwd.y * transformed.z);     // face the walk dir
+          vec3 wOrgW = (modelMatrix * vec4(walkOrg, 1.0)).xyz;
+          transformed = transformed * clamp(distance(wOrgW, cameraPosition) / 900.0, 1.0, 4.0) + walkOrg;
+          vec4 mvPosition = modelViewMatrix * vec4(transformed, 1.0);
+          gl_Position = projectionMatrix * mvPosition;`);
+    };
+    return m;
   };
+  const W_MATS = [mkWalkMat(0), mkWalkMat(1), mkWalkMat(2), mkWalkMat(3)];
+  const MAT_OF = { skin: 1, eyes: 0, shirt: 2, legs: 3, shoes: 3, hair0: 0, hair1: 0, hair2: 0 };
   function build() {
     const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
-    const YUP = new THREE.Vector3(0, 1, 0);
     const styleOf = (pp) => pp.ci % 7 === 3 ? -1 : pp.ci % 3;   // 1-in-7 bald; else buzz/full/topknot
     const groups = { skin: PEOPLE, eyes: PEOPLE, shirt: PEOPLE, legs: PEOPLE, shoes: PEOPLE,
       hair0: PEOPLE.filter(pp => styleOf(pp) === 0), hair1: PEOPLE.filter(pp => styleOf(pp) === 1),
       hair2: PEOPLE.filter(pp => styleOf(pp) === 2) };
     for (const [key, list] of Object.entries(groups)) {
       if (!list.length) continue;
-      const im = new THREE.InstancedMesh(GEO[key], pMat, list.length);
+      const im = new THREE.InstancedMesh(GEO[key], W_MATS[MAT_OF[key]], list.length);
       im.frustumCulled = false; im.matrixAutoUpdate = false;
+      const segA = new Float32Array(list.length * 4), wkA = new Float32Array(list.length * 2);
       list.forEach((pp, i) => {
         const s = (pp.kid ? 0.55 : 0.92 + (pp.ci % 5) * 0.045); // height variety (kids small)
-        _q.setFromAxisAngle(YUP, pp.yaw);
-        _p.set(pp.x, 1.1, pp.z);
+        _q.identity();                        // yaw + translation happen in the shader
+        _p.set(0, 0, 0);
         _s.set(s * pp.w, s, s * pp.w);
         _m.compose(_p, _q, _s);
         im.setMatrixAt(i, _m);
+        segA[i * 4] = pp.ax; segA[i * 4 + 1] = pp.az; segA[i * 4 + 2] = pp.dx; segA[i * 4 + 3] = pp.dz;
+        wkA[i * 2] = pp.ph; wkA[i * 2 + 1] = pp.spd;
         im.setColorAt(i, key === 'skin' ? SKINS[pp.ci % SKINS.length]
           : key === 'eyes' ? EYE
           : key === 'shirt' ? SHIRTS[pp.ci % SHIRTS.length]
@@ -7247,9 +7291,18 @@ const personas = (() => {
           : key === 'shoes' ? SHOES[pp.ci % SHOES.length]
           : HAIRS[(pp.ci * 3 + 1) % HAIRS.length]);
       });
+      im.geometry.setAttribute('iSeg', new THREE.InstancedBufferAttribute(segA, 4));
+      im.geometry.setAttribute('iWalk', new THREE.InstancedBufferAttribute(wkA, 2));
       im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
       scene.add(im);
     }
+  }
+  // current position of a walker (mirrors the shader's ping-pong exactly)
+  function posAt(pp) {
+    if (!pp.spd) return [pp.ax, pp.az];
+    const u = (cityUniforms.uTime.value * pp.spd / (2 * pp.len) + pp.ph) % 1;
+    const tri = 1 - Math.abs(2 * u - 1);
+    return [pp.ax + pp.dx * tri, pp.az + pp.dz * tri];
   }
   // ---- load + placement (once; seeded → identical crowd every visit) ----
   Promise.all([fetch('personas.json').then(r => r.json()), fetch('pums.json').then(r => r.json())])
@@ -7274,6 +7327,10 @@ const personas = (() => {
         for (const r of p.rings) for (const [x, y] of r) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
         bbox.set(p.id, [x0, x1, y0, y1]);
       }
+      // land test = Manhattan island OR borough fabric (traffic's combo — landOK alone
+      // is the BOROUGH predicate and rejects nearly all of Manhattan: the island lives
+      // west of the Brooklyn shoreline it tests against)
+      const landOr = (x, z) => onLand(x, z) || landOK(x, z);
       let placed = 0, ci = 0, rowN = 0;
       for (const row of pj.people) {
         if (TIER === 'low' && (rowN++ % 2)) continue; // phones: half the crowd (~350k tris instead of ~700k)
@@ -7283,8 +7340,36 @@ const personas = (() => {
           const lon = bb[0] + R() * (bb[1] - bb[0]), lat = bb[2] + R() * (bb[3] - bb[2]);
           if (!inRings(lon, lat, pu.rings)) continue;
           const g2 = subway.geoRaw(lat, lon);
-          if (!landOK(g2.x, g2.z)) continue;
-          PEOPLE.push({ x: g2.x, z: g2.z, yaw: R() * TAU, w: 0.88 + R() * 0.28, ci: ci++,
+          if (!landOr(g2.x, g2.z)) continue;
+          // walking beat: pace a sidewalk-offset stretch of the nearest GROUND street
+          // (rw 0 only — no bridges/tunnels/highways; streets are building-free and on
+          // land by construction, landOr re-checks the offset endpoints)
+          let ax = g2.x, az = g2.z, wyaw = R() * TAU,
+            dx = Math.sin(wyaw) * 0.01, dz = Math.cos(wyaw) * 0.01, spd = 0;
+          const ms = matchStreet(g2.x, g2.z, 300);
+          if (ms && G_EDGES[ms.ei].rw === 0) {
+            const e = G_EDGES[ms.ei], a = e.p[ms.seg], b = e.p[ms.seg + 1];
+            let vx = b[0] - a[0], vz = b[1] - a[1];
+            const sl = Math.hypot(vx, vz);
+            if (sl > 26) {
+              vx /= sl; vz /= sl;
+              const ins = Math.min(9, sl * 0.25), off = Math.min(e.w * 0.5 + 3.5, 15);
+              for (const side of (R() < 0.5 ? [1, -1] : [-1, 1])) {
+                const ox = -vz * off * side, oz = vx * off * side;
+                const x1 = a[0] + vx * ins + ox, z1 = a[1] + vz * ins + oz;
+                const x2 = b[0] - vx * ins + ox, z2 = b[1] - vz * ins + oz;
+                if (!landOr(x1, z1) || !landOr(x2, z2)) continue;
+                // path interior too — shoreline streets can dip over water mid-segment
+                if (!landOr((x1 + x2) / 2, (z1 + z2) / 2) ||
+                    !landOr(x1 * 0.75 + x2 * 0.25, z1 * 0.75 + z2 * 0.25) ||
+                    !landOr(x1 * 0.25 + x2 * 0.75, z1 * 0.25 + z2 * 0.75)) continue;
+                ax = x1; az = z1; dx = x2 - x1; dz = z2 - z1; spd = 2.0 + R() * 1.5;
+                break;
+              }
+            }
+          }
+          PEOPLE.push({ x: ax, z: az, ax, az, dx, dz, len: Math.hypot(dx, dz) || 0.001,
+            ph: R(), spd, yaw: wyaw, w: 0.88 + R() * 0.28, ci: ci++,
             kid: row[1] < 15 ? 1 : 0, p: row, area: pu.name + ' (' + pu.boro + ')',
             rep: pj.repPer[String(row[0])] || 650 });
           placed++; break;
@@ -7314,8 +7399,8 @@ const personas = (() => {
     setFocus('resident persona (Census ACS PUMS sample)', head + ' — ' + pp.area,
       { age, sex: female ? 'female' : 'male', raceEthnicity: D.races[raceI], bornIn: D.origins[orgI],
         occupation: occ || null, incomeK: incK >= 0 ? incK : null, area: pp.area, representsResidents: pp.rep },
-      () => [pp.x, 6, pp.z]);
-    focusui.enter(() => [pp.x, 6, pp.z], '<b>' + head + '</b>');
+      () => { const [px, pz] = posAt(pp); return [px, 6, pz]; });
+    focusui.enter(() => { const [px, pz] = posAt(pp); return [px, 6, pz]; }, '<b>' + head + '</b>');
   }
   function close() { card.style.display = 'none'; }
   cardX.addEventListener('click', close);
@@ -7330,18 +7415,19 @@ const personas = (() => {
     camera.getWorldDirection(_pd);
     let best = null, bd = 20 * 20;
     for (const pp of PEOPLE) {
-      const dx = pp.x - camera.position.x, dz = pp.z - camera.position.z;
+      const [px, pz] = posAt(pp); // walkers move — pick against the live position
+      const dx = px - camera.position.x, dz = pz - camera.position.z;
       if (dx * dx + dz * dz > 5200 * 5200) continue; // beyond the fade — not clickable
       _pv.set(dx, 4.5 - camera.position.y, dz);
       if (_pv.dot(_pd) < 0) continue;
-      _pv.set(pp.x, 4.5, pp.z).project(camera);
+      _pv.set(px, 4.5, pz).project(camera);
       const sx = (_pv.x * 0.5 + 0.5) * innerWidth, sy = (-_pv.y * 0.5 + 0.5) * innerHeight;
       const d = (sx - e.clientX) * (sx - e.clientX) + (sy - e.clientY) * (sy - e.clientY);
       if (d < bd) { bd = d; best = pp; }
     }
     if (best) open(best);
   });
-  return { list: PEOPLE, open, close };
+  return { list: PEOPLE, open, close, posAt };
 })();
 window.__personas = personas; // dev/testing hook
 
@@ -8224,6 +8310,7 @@ const concierge = (() => {
     }
   }
   infoBtn.addEventListener('click', () => document.body.classList.toggle('aguses'));
+  document.getElementById('agentCloseBtn').addEventListener('click', () => document.body.classList.remove('agent'));
   fab.addEventListener('click', () => {
     const on = document.body.classList.toggle('agent');
     if (on && !greeted) { greeted = true; add('ai', 'Ask me about live NYC — or tell me where to fly, what to map, or when to rewind to. Tap ⓘ for everything I can do.'); }
