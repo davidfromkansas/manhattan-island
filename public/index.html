@@ -9092,6 +9092,13 @@ function frame() {
     if (camTween.t >= 1) camTween = null;
   }
   fly.tick(dt);
+  // street-level control boost: OrbitControls speed is distance-proportional (one
+  // wheel tick ≈ 5% of the orbit radius), which reads as molasses near the ground in
+  // a 28 km scene. Floor the effective zoom/pan speed once the orbit radius drops
+  // under ~260 m; 1× above that, so browsing-altitude feel is unchanged.
+  const _cd = camera.position.distanceTo(controls.target);
+  controls.zoomSpeed = Math.min(6, Math.max(1, 260 / _cd));
+  controls.panSpeed = Math.min(4, Math.max(1, 260 / _cd));
   if (!fly.st.on) controls.update();
   // keep the camera out of the ground / water
   if (camera.position.y < 6) camera.position.y = 6;
