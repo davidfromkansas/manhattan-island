@@ -6,6 +6,77 @@ the rules on adding entries.
 
 ---
 
+## 🎛️ On-screen camera controls
+
+**Shipped:** July 10, 2026
+
+**TL;DR:** Two click-or-hold control clusters above the concierge now drive the camera —
+a rotation dial and a movement pad — so you can fly the city without a mouse drag or
+keyboard.
+
+**What you'll see:** Above the "Ask David!" concierge, a circular dial and a cross-shaped
+pad, glossy navy buttons on metallic plates. The dial's curved side arrows orbit the city
+left/right, its top/bottom wedges tilt the view over toward a bird's-eye or under toward
+street level, and its center **+/−** raises or lowers the camera straight up and down.
+The pad's **▲/▼** zoom in and out; **◀/▶** slide the view laterally. Every button gives
+one nudge per click and glides continuously while held, with speeds that scale to how
+far out you are.
+
+**How it works:** A pure SVG/DOM overlay driving the existing orbit camera — zoom stays
+inside the scene's 25 m–28 km distance limits, tilt respects the polar clamp, and
+vertical moves floor out above the ground. Pressing any button cancels an in-flight
+camera fly-to, the same as grabbing the view; the controls hide in photo mode and while
+the concierge panel is open. No external data.
+
+## 🕐 Status panel, docked timeline + city radio
+
+**Shipped:** July 10, 2026
+
+**TL;DR:** The top-right weather strip is now a segmented status panel with icons, the
+7-day timeline docks directly beneath it at matching width, and a looping city-radio
+ambience plays with a speaker toggle on the panel.
+
+**What you'll see:** A glossy white panel in the top-right: a clock with big local time
+and the date, a thermometer with °F, a weather glyph that tracks both conditions and
+time of day (🌙 on clear nights, ⛈️ in storms), a compass with wind direction and speed,
+and a speaker button. Occasional statuses — bird-migration counts, "replaying
+YYYY-MM-DD", the sun-scrub offset, "weather offline" — appear as a small footnote row
+only when they apply. The LIVE/scrub timeline sits right below at exactly the panel's
+width, restyled to match; scrubbing, the day ticks, and the "now" button behave exactly
+as before. The radio starts on at gentle volume; the speaker mutes it (red slash) and
+un-mutes it again.
+
+**How it works:** The panel is a re-render of feeds already in the scene — the same
+weather/wind readout and [BirdCast](https://birdcast.info) migration numbers as the old
+strip, no new data sources. The audio is a bundled 60-second ambient loop (trimmed from
+an hour-long "good morning New Yorkers" mix down to ~1 MB) played through a looping
+`<audio>` element; browsers gate autoplay with sound, so if blocked it starts on the
+first click or keypress. Timeline logic is untouched — only its position and skin moved.
+
+## 🗽 The real Statue of Liberty
+
+**Shipped:** July 10, 2026
+
+**TL;DR:** The Liberty Island placeholder (two green prisms and a beam) is now the
+actual Statue of Liberty, rebuilt from the city's own survey model.
+
+**What you'll see:** On the Liberty islet southwest of the Battery, a ~47 m copper-patina
+statue standing on the existing stylized pedestal — raised torch with a gilded flame,
+tablet arm, crown, robe folds — facing southeast toward the Verrazzano-Narrows, the way
+the real one greets ships entering the harbor.
+
+**How it works:** Geometry comes from the [NYC DCP 3D city model](https://www.nyc.gov/site/planning/data-maps/open-data/dwn-nyc-3d-model-download.page)
+(tile `nyc_3dmodel_mn01`, Rhino layer `Buildings::Statue_of_Liberty` — 2,457 objects;
+Liberty Island is officially part of Manhattan CD1, so she ships with the Lower
+Manhattan tile). The DCP model is a CAD curve network without a closed skin, so the
+statue was reconstructed offline: curves densified to a point cloud, voxelized at
+0.75 ft, morphologically closed, marching-cubes surfaced, smoothed, and decimated to
+~23k triangles. Positions are u16-quantized into `public/liberty.json` (~275 KB),
+lazy-fetched after scene load into a single Lambert mesh (one extra draw call; the
+material joins the cloud-shadow system). The reconstruction is honest about its
+limits: crown spikes and the face melt into the voxel closing — she reads perfectly
+at harbor scale, less so from a helicopter selfie distance.
+
 ## 🧑‍🤝‍🧑 Ask the Concierge who lives where (Census demographics)
 
 **Shipped:** July 9, 2026

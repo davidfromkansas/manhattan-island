@@ -95,14 +95,36 @@
     padding:4px 10px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
   }
   body.photo #camview { display:none !important; }
-  #chip {
+  #hud { /* top-right stack: Sims panel + timeline scrub below it, same width */
     position:fixed; top:12px; right:12px; z-index:10;
-    font:11px/1.4 system-ui, -apple-system, sans-serif; color:rgba(255,255,255,.85);
-    background:rgba(10,13,20,.55); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-    border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:5px 11px;
-    user-select:none; transition:opacity .4s; white-space:nowrap;
+    display:flex; flex-direction:column; align-items:stretch; gap:8px;
   }
-  #chip .off { opacity:.45; }
+  #chip { /* Sims-style status panel: glossy white segments (time/temp/weather/wind) + city-radio speaker */
+    display:flex; align-items:center; flex-wrap:wrap; justify-content:flex-end;
+    font:12px/1.2 'Arial Rounded MT Bold','Trebuchet MS',system-ui,sans-serif;
+    color:#1d4f9c; user-select:none; transition:opacity .4s; white-space:nowrap;
+    background:linear-gradient(180deg,#fff 0%,#f3f8fe 45%,#e2edfb 100%);
+    border:2px solid #fff; border-radius:18px; padding:6px 8px;
+    box-shadow:0 5px 16px rgba(8,20,50,.4), inset 0 1px 0 #fff, inset 0 -3px 8px rgba(130,160,210,.28);
+  }
+  #chip .seg { display:flex; align-items:center; gap:7px; padding:2px 10px; }
+  #chip .seg svg { width:27px; height:27px; flex:none; }
+  #chip .v { display:flex; flex-direction:column; align-items:flex-start; gap:1px; }
+  #chip .v b { font-size:17px; color:#17418a; letter-spacing:.2px; }
+  #chip .v b small { font-size:10px; margin-left:2px; }
+  #chip .v span { font-size:9.5px; color:#5f81b6; }
+  #chip .sep { align-self:stretch; width:1px; margin:3px 0;
+    background:linear-gradient(180deg,transparent,#b9cdea,transparent); }
+  #chip .wxi { font-size:23px; }
+  #chSnd { width:36px; height:36px; margin-left:6px; padding:4px; cursor:pointer; border-radius:50%;
+    border:1px solid #d3e2f6; background:linear-gradient(180deg,#fff,#e7f0fc);
+    box-shadow:0 1px 3px rgba(20,40,90,.25), inset 0 1px 0 #fff; transition:transform .15s; }
+  #chSnd:hover { transform:scale(1.08); }
+  #chSnd svg { display:block; width:100%; height:100%; }
+  #chip .xtra { flex-basis:100%; display:none; text-align:right; padding:3px 6px 0;
+    font-size:9.5px; color:#6c88b0; }
+  #chip .off { opacity:.65; }
+  @media (max-width: 820px) { #hud { transform:scale(.72); transform-origin:top right; } }
   .flbl {
     position:fixed; left:0; top:0; z-index:9; display:none; pointer-events:auto; cursor:pointer;
     font:10px/1.35 system-ui, -apple-system, sans-serif; color:rgba(255,255,255,.85);
@@ -151,31 +173,31 @@
   .flbl b { color:#fff; font-weight:600; }
   .flbl .sub { color:rgba(255,255,255,.55); }
   body.photo .flbl { display:none !important; }
-  #scrub {
-    position:fixed; left:50%; bottom:56px; transform:translateX(-50%); z-index:10;
-    display:flex; gap:7px; align-items:center;
-    font:10px system-ui,sans-serif; color:rgba(255,255,255,.6);
-    background:rgba(10,13,20,.5); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-    border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:4px 10px;
+  #scrub { /* timeline scrub — Sims-styled to match #chip; #hud stretches it to the panel's width */
+    display:flex; gap:8px; align-items:center;
+    font:10px 'Arial Rounded MT Bold','Trebuchet MS',system-ui,sans-serif; color:#5f81b6;
+    background:linear-gradient(180deg,#fff 0%,#f3f8fe 45%,#e2edfb 100%);
+    border:2px solid #fff; border-radius:14px; padding:5px 10px;
+    box-shadow:0 5px 16px rgba(8,20,50,.35), inset 0 1px 0 #fff, inset 0 -3px 8px rgba(130,160,210,.28);
     user-select:none; transition:opacity .4s;
   }
-  #scrub input[type=range] { width:min(280px, 46vw); accent-color:#e8a558; height:10px; }
-  #tlWrap { position:relative; display:flex; align-items:center; }
+  #scrub input[type=range] { width:100%; accent-color:#3f7fd6; height:10px; }
+  #tlWrap { position:relative; display:flex; align-items:center; flex:1; min-width:0; }
   #tlTicks { position:absolute; left:8px; right:8px; top:-2px; height:4px; pointer-events:none; }
-  #tlTicks i { position:absolute; width:4px; height:4px; border-radius:50%; background:#7fd7ff; opacity:.9; transform:translateX(-50%); }
+  #tlTicks i { position:absolute; width:4px; height:4px; border-radius:50%; background:#3f9be0; opacity:.9; transform:translateX(-50%); }
   #tlBadge {
     display:flex; align-items:center; gap:4px; font-weight:600; white-space:nowrap;
-    min-width:58px; justify-content:center; padding:1px 6px; border-radius:6px;
-    background:rgba(255,255,255,.06); color:rgba(255,255,255,.55);
+    min-width:58px; justify-content:center; padding:2px 6px; border-radius:8px;
+    background:rgba(63,127,214,.10); color:#8aa3c8;
   }
-  #tlBadge i { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,.3); flex:0 0 auto; }
-  #tlBadge.live { color:#fff; } #tlBadge.live i { background:#ff5f56; animation:camblink 1.6s infinite; }
-  #tlBadge.sun { color:#e8a558; } #tlBadge.sun i { background:#e8a558; }
-  #tlBadge.past { color:#7fd7ff; } #tlBadge.past i { background:#7fd7ff; }
+  #tlBadge i { width:6px; height:6px; border-radius:50%; background:#b9cdea; flex:0 0 auto; }
+  #tlBadge.live { color:#17418a; } #tlBadge.live i { background:#ff5f56; animation:camblink 1.6s infinite; }
+  #tlBadge.sun { color:#c07f1f; } #tlBadge.sun i { background:#e8a558; }
+  #tlBadge.past { color:#1f7fc0; } #tlBadge.past i { background:#3f9be0; }
   #scrub button {
-    font:10px system-ui,sans-serif; color:rgba(255,255,255,.8); cursor:pointer;
-    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.10);
-    border-radius:6px; padding:1px 7px;
+    font:10px 'Arial Rounded MT Bold','Trebuchet MS',system-ui,sans-serif; color:#17418a; cursor:pointer;
+    background:linear-gradient(180deg,#fff,#e7f0fc); border:1px solid #d3e2f6;
+    border-radius:8px; padding:2px 8px; box-shadow:0 1px 3px rgba(20,40,90,.2), inset 0 1px 0 #fff;
   }
   body.photo #chip, body.manual #chip, body.photo #scrub, body.manual #scrub { opacity:0; pointer-events:none; }
   #agentFab { /* the concierge persona — portrait + "Talk to me!" pill (public/concierge-*.png) */
@@ -187,6 +209,26 @@
   #agentFab img.talk { position:absolute; left:14%; bottom:8%; width:72%; } /* pill overlaps his chest, per the source art */
   #agentFab:hover { transform:scale(1.05) translateY(-2px); }
   @media (max-width: 600px) { #agentFab { width:92px; right:8px; bottom:52px; } } /* clear the mobile control bar */
+  #camDial { /* Sims-style movement dial above the concierge: up/down/left/right + zoom, click or hold */
+    position:fixed; right:22px; bottom:216px; z-index:31; width:112px; height:112px;
+    user-select:none; -webkit-user-select:none; touch-action:none;
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,.5)); transition:opacity .4s;
+  }
+  #rotDial { /* rotation dial stacked above: orbit left/right, tilt over/under + zoom center */
+    position:fixed; right:22px; bottom:338px; z-index:31; width:112px; height:112px;
+    user-select:none; -webkit-user-select:none; touch-action:none;
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,.5)); transition:opacity .4s;
+  }
+  #camDial svg, #rotDial svg { display:block; width:100%; height:100%; }
+  #camDial .db, #rotDial .db { fill:url(#cdNavy); stroke:#101a36; stroke-width:1.4; cursor:pointer; }
+  #camDial .db:hover, #rotDial .db:hover { fill:url(#cdNavyHi); }
+  #camDial .db:active, #rotDial .db:active { fill:#5f77bd; }
+  #camDial .ic, #rotDial .ic { pointer-events:none; }
+  body.agent #camDial, body.photo #camDial, body.agent #rotDial, body.photo #rotDial { display:none !important; }
+  @media (max-width: 600px) {
+    #camDial { width:88px; height:88px; right:10px; bottom:200px; }
+    #rotDial { width:88px; height:88px; right:10px; bottom:296px; }
+  }
   #agentPanel { /* full-height side panel, glass over the scene */
     position:fixed; right:0; top:0; bottom:0; z-index:31; width:min(380px, 88vw);
     display:none; flex-direction:column; gap:6px;
@@ -307,6 +349,7 @@
 <div id="camview"><div class="ring"><img alt="live traffic camera"><div class="live"><i></i>LIVE</div><button class="x" title="close">✕</button></div><div class="name"></div></div>
 <div id="personaCard"><button class="x" title="close">✕</button><div class="phead"></div><div class="pbody"></div><div class="pfoot"></div></div>
 <div id="dbg"></div>
+<div id="hud">
 <div id="chip"></div>
 <div id="scrub">
   <span id="tlBadge" class="live"><i></i>LIVE</span>
@@ -315,6 +358,62 @@
     <input id="timeSlider" type="range" min="-10080" max="0" step="5" value="0" title="Scrub the city back through the last 7 days">
   </div>
   <button id="timeReset" title="Back to now">now</button>
+</div>
+</div>
+<div id="rotDial"><!-- rotation module: orbit left/right, tilt over/under -->
+  <svg viewBox="0 0 120 120">
+    <circle cx="60" cy="60" r="58" fill="url(#cdM)"/>
+    <circle cx="60" cy="60" r="52" fill="#141f3f"/>
+    <path class="db" data-act="ro" d="M27.9 21.7 A50 50 0 0 1 92.1 21.7 L78 38.6 A28 28 0 0 0 42 38.6 Z"><title>rotate over (bird's-eye)</title></path>
+    <path class="db" data-act="rl" d="M98.3 27.9 A50 50 0 0 1 98.3 92.1 L81.4 78 A28 28 0 0 0 81.4 42 Z"><title>rotate left</title></path>
+    <path class="db" data-act="ru" d="M92.1 98.3 A50 50 0 0 1 27.9 98.3 L42 81.4 A28 28 0 0 0 78 81.4 Z"><title>rotate under (street level)</title></path>
+    <path class="db" data-act="rr" d="M21.7 92.1 A50 50 0 0 1 21.7 27.9 L38.6 42 A28 28 0 0 0 38.6 78 Z"><title>rotate right</title></path>
+    <path class="db" data-act="eu" d="M36.5 58 A23.5 23.5 0 0 1 83.5 58 Z"><title>move up</title></path>
+    <path class="db" data-act="ed" d="M83.5 62 A23.5 23.5 0 0 1 36.5 62 Z"><title>move down</title></path>
+    <g class="ic" fill="none" stroke="#dfe9ff" stroke-width="4" stroke-linecap="round">
+      <path d="M60 41v12M54 47h12"/>
+      <path d="M54 73h12"/>
+      <path d="M31 60 A9 9 0 1 1 22 51" transform="translate(22 60) scale(.9) translate(-22 -60)"/>
+      <path d="M89 60 A9 9 0 1 0 98 51" transform="translate(98 60) scale(.9) translate(-98 -60)"/>
+      <path d="M52 25 A8 8 0 0 1 68 25"/>
+      <path d="M52 95 A8 8 0 0 0 68 95"/>
+    </g>
+    <g class="ic" fill="#dfe9ff" stroke="none">
+      <path d="M30 51 L22 46 L22 56 Z" transform="translate(22 60) scale(.9) translate(-22 -60)"/>
+      <path d="M90 51 L98 46 L98 56 Z" transform="translate(98 60) scale(.9) translate(-98 -60)"/>
+      <path d="M68 32 L64 23.5 L72 23.5 Z"/>
+      <path d="M68 88 L64 96.5 L72 96.5 Z"/>
+    </g>
+  </svg>
+</div>
+<div id="camDial"><!-- movement module: up/down/left/right + zoom -->
+  <svg viewBox="0 0 120 120">
+    <defs>
+      <linearGradient id="cdM" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#eef2f8"/><stop offset=".45" stop-color="#8f98ac"/><stop offset="1" stop-color="#343b4e"/>
+      </linearGradient>
+      <linearGradient id="cdNavy" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#5a6fae"/><stop offset=".5" stop-color="#33437c"/><stop offset="1" stop-color="#222e5a"/>
+      </linearGradient>
+      <linearGradient id="cdNavyHi" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#7288c9"/><stop offset=".5" stop-color="#425492"/><stop offset="1" stop-color="#2c3a6e"/>
+      </linearGradient>
+    </defs>
+    <rect x="38" y="2" width="44" height="116" rx="14" fill="url(#cdM)"/>
+    <rect x="2" y="38" width="116" height="44" rx="14" fill="url(#cdM)"/>
+    <rect x="43" y="7" width="34" height="106" rx="11" fill="#141f3f"/>
+    <rect x="7" y="43" width="106" height="34" rx="11" fill="#141f3f"/>
+    <rect class="db" data-act="zi" x="46" y="10" width="28" height="34" rx="9"><title>zoom in</title></rect>
+    <rect class="db" data-act="zo" x="46" y="76" width="28" height="34" rx="9"><title>zoom out</title></rect>
+    <rect class="db" data-act="pl" x="10" y="46" width="34" height="28" rx="9"><title>move left</title></rect>
+    <rect class="db" data-act="pr" x="76" y="46" width="34" height="28" rx="9"><title>move right</title></rect>
+    <g class="ic" fill="#dfe9ff" stroke="none">
+      <path d="M60 21l8 10.5h-16z"/>
+      <path d="M60 99l-8-10.5h16z"/>
+      <path d="M21.5 60l10.5-8v16z"/>
+      <path d="M98.5 60l-10.5-8v16z"/>
+    </g>
+  </svg>
 </div>
 <button id="agentFab" title="City Concierge — ask about live NYC, or say where to fly">
   <img src="concierge-portrait.png" alt="City Concierge">
@@ -1925,8 +2024,8 @@ const clampEastOfManhattan = (ring, margin) => ring.map(([x, z]) =>
   [z > Z_TIP_S && z < Z_TIP_N ? Math.max(x, coastAt(z).e + margin) : x, z]);
 islets.push([QB.ISL.ri, isletMat]);                                    // Roosevelt (real, channel-fitted above)
 islets.push([QB.ISL.gi, isletMat]);                                    // Governors (real)
-islets.push([ellipseLoop(-2650, -2450, 100, 90), isletMat]);           // Liberty
-islets.push([ellipseLoop(-2500, -1650, 90, 70), isletMat]);            // Ellis
+islets.push([ellipseLoop(-1239, -1910, 100, 90), isletMat]);           // Liberty (geoRaw 40.68925,-74.0445)
+islets.push([ellipseLoop(-1391, -752, 90, 70), isletMat]);             // Ellis (geoRaw 40.6993,-74.0396)
 islets.push([clampEastOfManhattan(QB.ISL.rw, 55), isletParkMat]);      // Randalls/Wards (real)
 islets.push([QB.ISL.rk, isletMat]);                                    // Rikers (real)
 for (const [l, m] of islets) scene.add(flatLand(l, 1.7, m));
@@ -2208,7 +2307,7 @@ const midMeshes = [];
     }
   }
   for (const s of SUPERS) for (let i = 0; i < 34; i++) spots.push([s.x0 + RT() * (s.x1 - s.x0), LAND_Y, s.z0 + RT() * (s.z1 - s.z0), 0.7 + RT()]);
-  for (const [cx, cz, rx, rz, n, y] of [[-2650, -2450, 70, 60, 20, 1.7]])
+  for (const [cx, cz, rx, rz, n, y] of [[-1239, -1910, 70, 60, 20, 1.7]])
     for (let i = 0; i < n; i++) { const a = RT() * TAU, r = Math.sqrt(RT()); spots.push([cx + Math.cos(a) * rx * r, y, cz + Math.sin(a) * rz * r, 0.8 + RT()]); }
   // Governors + Randalls/Wards trees: rejection-sampled inside the REAL island rings
   {
@@ -2963,14 +3062,28 @@ function buildLandmarks() {
   // — Cloisters + Belvedere (on their hills) —
   { const y = elevAt(-730, 19420); lbox(-730, 19420, y, 16, 34, 26, [0.62, 0.56, 0.46]); lprism(-730, 19420, y + 16, 16, 6, 5, 4, [0.62, 0.56, 0.46]); }
   { const y = elevAt(-430, 10380) + 4; lbox(-430, 10380, y, 10, 14, 14, [0.55, 0.53, 0.50]); lprism(-424, 10386, y + 10, 8, 3.5, 3, 6, [0.55, 0.53, 0.50]); }
-  // — Statue of Liberty —
-  { const sx = -2650, sz = -2450;
+  // — Statue of Liberty — real geometry from the DCP NYC 3D model (nyc_3dmodel_mn01,
+  //   layer Buildings::Statue_of_Liberty; curve network voxel-reconstructed offline to
+  //   ~23k tris, u16-quantized in liberty.json). Pedestal stays stylized; statue mesh
+  //   lazy-loads and the copper lady lands on the pedestal top (y = 37.7).
+  { const sx = -1239, sz = -1910; // Liberty Island via geoRaw(40.68925, -74.0445)
     pushBoxG(LS, sx, sz, 1.7, 9, 42, 42, 0.4, [0.62, 0.56, 0.46], 0.4, -1);
     pushPrism(LS, sx, sz, 10.7, 27, 13, 9, 4, 0.4, [0.62, 0.56, 0.46], 0.4, -1);
-    pushPrism(LS, sx, sz, 37.7, 26, 6.5, 3.6, 8, 0, [0.45, 0.70, 0.57], 0.4, -1);
-    pushPrism(LS, sx, sz, 63.7, 4.5, 2.4, 1.8, 8, 0, [0.45, 0.70, 0.57], 0.4, -1);
-    pushBeam(LS, sx + 4, 55.7, sz - 3, sx + 7.5, 75.7, sz - 5, 0.9, [0.45, 0.70, 0.57]);
-    pushPrism(ES, sx + 7.5, sz - 5, 75.7, 3, 1.4, 0.6, 6, 0, [1, 0.8, 0.35], 0.5, -1); // torch
+    fetch('liberty.json').then(r => r.json()).then(j => {
+      const u16 = s => { const a = atob(s), u = new Uint8Array(a.length); for (let i = 0; i < a.length; i++) u[i] = a.charCodeAt(i); return new Uint16Array(u.buffer); };
+      const q = u16(j.v), pos = new Float32Array(q.length);
+      for (let i = 0; i < q.length; i += 3) for (let k = 0; k < 3; k++) pos[i + k] = q[i + k] / 65535 * j.scale[k] + j.off[k];
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setIndex(new THREE.BufferAttribute(u16(j.i), 1));
+      g.computeVertexNormals();
+      const m = new THREE.Mesh(g, patchClouds(new THREE.MeshLambertMaterial({ color: 0x73b392 }), true)); // copper patina
+      m.position.set(sx, 37.7, sz); m.rotation.y = 1.31; // faces SE down the harbor (true az ~142deg through the 29deg grid twist)
+      scene.add(m);
+      const f = new THREE.Vector3(-1.46, 45.4, 5.22).applyAxisAngle(new THREE.Vector3(0, 1, 0), 1.31); // flame tip, local -> rotated
+      const fl = new THREE.Mesh(new THREE.ConeGeometry(1.1, 3.4, 6), new THREE.MeshBasicMaterial({ color: 0xffcc59 })); // gilded flame (unlit — ES sink is already baked by fetch time)
+      fl.position.set(sx + f.x, 37.7 + f.y, sz + f.z); scene.add(fl);
+    }).catch(() => {});
   }
   // Central Park perimeter wall
   lbox(PARK.x0 - 2, (PARK.z0 + PARK.z1) / 2, 0, 1.4, 3, PARK.z1 - PARK.z0, [0.35, 0.33, 0.30], -1);
@@ -4146,6 +4259,71 @@ window.__cam = (px, py, pz, tx, ty, tz) => { camTween = null; camera.position.se
 renderer.domElement.addEventListener('pointerdown', () => { camTween = null; });
 renderer.domElement.addEventListener('wheel', () => { camTween = null; }, { passive: true });
 
+// camera dial (#camDial, Sims-style): zoom / orbit / elevation; click = one nudge,
+// hold = continuous. Any press cancels a fly-tween, like grabbing the view.
+{
+  const _doff = new THREE.Vector3();
+  let dialAct = null, dialT = 0, dialRaf = 0;
+  function dialStep(dt) {
+    camTween = null;
+    const t = controls.target;
+    _doff.copy(camera.position).sub(t);
+    if (dialAct === 'zi' || dialAct === 'zo') {
+      const k = Math.exp((dialAct === 'zi' ? -0.575 : 0.575) * dt);
+      _doff.setLength(clamp(_doff.length() * k, controls.minDistance, controls.maxDistance));
+      camera.position.copy(t).add(_doff);
+    } else if (dialAct === 'rl' || dialAct === 'rr') {
+      // mirrored presentation (scaleX(-1)): screen-left orbit = positive azimuth here
+      const a = (dialAct === 'rl' ? 1 : -1) * 0.525 * dt;
+      const c = Math.cos(a), s = Math.sin(a);
+      const x = _doff.x * c - _doff.z * s, z = _doff.x * s + _doff.z * c;
+      _doff.x = x; _doff.z = z;
+      camera.position.copy(t).add(_doff);
+    } else if (dialAct === 'eu' || dialAct === 'ed') {
+      // vertical slide: camera + target together, so the view translates straight up/down
+      const v = Math.max(_doff.length() * 0.3, 20) * (dialAct === 'eu' ? 1 : -1) * dt;
+      const ny = clamp(camera.position.y + v, 6, 26000);
+      t.y += ny - camera.position.y;
+      camera.position.y = ny;
+    } else if (dialAct === 'pl' || dialAct === 'pr') {
+      // lateral slide: camera + target along screen-right (mirror-corrected)
+      const n = Math.hypot(_doff.x, _doff.z) || 1;
+      const s = (dialAct === 'pr' ? 1 : -1) * Math.max(_doff.length() * 0.275, 20) * dt;
+      const rx = -_doff.z / n * s, rz = _doff.x / n * s;
+      camera.position.x += rx; camera.position.z += rz;
+      t.x += rx; t.z += rz;
+    } else if (dialAct === 'ro' || dialAct === 'ru') {
+      // vertical orbit: swing over (bird's-eye) / under (street level) around the target
+      const r = _doff.length();
+      const theta = Math.atan2(_doff.x, _doff.z);
+      let phi = Math.acos(clamp(_doff.y / r, -1, 1)); // 0 = straight overhead
+      phi = clamp(phi + (dialAct === 'ro' ? -1 : 1) * 0.525 * dt, 0.05, controls.maxPolarAngle);
+      _doff.set(Math.sin(phi) * Math.sin(theta), Math.cos(phi), Math.sin(phi) * Math.cos(theta)).multiplyScalar(r);
+      camera.position.copy(t).add(_doff);
+    }
+    controls.update();
+  }
+  function dialLoop(T) {
+    if (!dialAct) return;
+    dialStep(Math.min((T - dialT) / 1000, 0.05));
+    dialT = T;
+    dialRaf = requestAnimationFrame(dialLoop);
+  }
+  for (const b of document.querySelectorAll('#camDial .db, #rotDial .db')) {
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      try { b.setPointerCapture(e.pointerId); } catch (_) {}
+      dialAct = b.dataset.act; dialT = performance.now();
+      dialStep(0.07); // the click nudge; holding keeps going from here
+      cancelAnimationFrame(dialRaf);
+      dialRaf = requestAnimationFrame(dialLoop);
+    });
+    const dialEnd = () => { dialAct = null; cancelAnimationFrame(dialRaf); };
+    b.addEventListener('pointerup', dialEnd);
+    b.addEventListener('pointercancel', dialEnd);
+  }
+}
+
 // quality
 let shadowSize = 2048;
 const QUAL = {
@@ -4822,20 +5000,72 @@ const live = (() => {
     if (c >= 95) return 'Thunderstorm'; return 'Clear';
   }
   const chipEl = document.getElementById('chip');
+  // Sims-style panel: static structure built once, updateChip only writes the value nodes
+  chipEl.innerHTML =
+    '<div class="seg"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#2e6bc4" stroke-width="2.2"/><path d="M12 7v5l3.5 2" fill="none" stroke="#2e6bc4" stroke-width="2.2" stroke-linecap="round"/></svg>' +
+      '<div class="v"><b id="chTime">--:--</b><span id="chDate"></span></div></div><div class="sep"></div>' +
+    '<div class="seg"><svg viewBox="0 0 24 24"><path d="M10 4a2 2 0 0 1 4 0v9.3a4.5 4.5 0 1 1-4 0z" fill="none" stroke="#2e6bc4" stroke-width="2"/><circle cx="12" cy="17.5" r="2.2" fill="#2e6bc4"/><path d="M12 16V8" stroke="#2e6bc4" stroke-width="2" stroke-linecap="round"/></svg>' +
+      '<div class="v"><b id="chTemp">--°F</b></div></div><div class="sep"></div>' +
+    '<div class="seg"><span class="wxi" id="chWxi">⛅</span><div class="v"><b id="chCond">—</b></div></div><div class="sep"></div>' +
+    '<div class="seg"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#2e6bc4" stroke-width="2"/><path d="M12 5.5l2.6 6.5-2.6 6.5-2.6-6.5z" fill="#2e6bc4"/><circle cx="12" cy="12" r="1.2" fill="#fff"/><text x="12" y="4.5" text-anchor="middle" font-size="5" fill="#2e6bc4">N</text></svg>' +
+      '<div class="v"><b id="chWind">—</b><span id="chWindL">Wind</span></div></div>' +
+    '<button id="chSnd" title="mute the city radio"><svg viewBox="0 0 24 24"><path d="M4 9.2v5.6h3.4L12 18.6V5.4L7.4 9.2z" fill="#2e6bc4"/>' +
+      '<g id="chSndOn" fill="none" stroke="#2e6bc4" stroke-width="2" stroke-linecap="round"><path d="M15 9.5a3.6 3.6 0 0 1 0 5"/><path d="M17.6 7a7.2 7.2 0 0 1 0 10"/></g>' +
+      '<g id="chSndOff" style="display:none" fill="none" stroke="#b3413a" stroke-width="2.2" stroke-linecap="round"><path d="M15.5 9.5l5 5"/><path d="M20.5 9.5l-5 5"/></g></svg></button>' +
+    '<div class="xtra" id="chXtra"></div>';
+  const chT = document.getElementById('chTime'), chD = document.getElementById('chDate'),
+    chTp = document.getElementById('chTemp'), chWx = document.getElementById('chWxi'),
+    chC = document.getElementById('chCond'), chW = document.getElementById('chWind'),
+    chWL = document.getElementById('chWindL'), chX = document.getElementById('chXtra');
+  function condIcon(c, night) {
+    if (c === 0) return night ? '🌙' : '☀️'; if (c <= 2) return night ? '☁️' : '⛅'; if (c === 3) return '☁️';
+    if (c === 45 || c === 48) return '🌫️'; if (c <= 57) return '🌦️'; if (c <= 67) return '🌧️';
+    if (c <= 77) return '❄️'; if (c <= 82) return '🌧️'; if (c <= 86) return '🌨️';
+    if (c >= 95) return '⛈️'; return night ? '🌙' : '☀️';
+  }
+  // city radio: 60 s ambience bed ("Good Morning New Yorkers"), loops forever, ON by
+  // default — browsers gate autoplay-with-sound, so the first gesture kicks it if blocked
+  const AMB = new Audio('gmny-loop.mp3');
+  AMB.loop = true; AMB.preload = 'auto'; AMB.volume = 0.45;
+  let ambOn = true;
+  const sndBtn = document.getElementById('chSnd');
+  sndBtn.addEventListener('click', () => {
+    ambOn = !ambOn;
+    if (ambOn) AMB.play().catch(() => {}); else AMB.pause();
+    document.getElementById('chSndOn').style.display = ambOn ? '' : 'none';
+    document.getElementById('chSndOff').style.display = ambOn ? 'none' : '';
+    sndBtn.title = ambOn ? 'mute the city radio' : 'unmute the city radio';
+  });
+  const ambKick = () => {
+    if (ambOn && AMB.paused) AMB.play().catch(() => {});
+    if (!ambOn || !AMB.paused) { window.removeEventListener('pointerdown', ambKick); window.removeEventListener('keydown', ambKick); }
+  };
+  window.addEventListener('pointerdown', ambKick);
+  window.addEventListener('keydown', ambKick);
+  AMB.play().catch(() => {});
   function updateChip() {
     if (!active) return;
     const f = Math.round((W.tempC * 9) / 5 + 32);
     const mph = Math.round(W.windKmh * 0.621371);
     const dt_ = new Date(nowMs());
-    chipEl.innerHTML = (HIST.active || scrubMin <= -720 ? WD_FMT.format(dt_) + ' · ' : '') + TIME_FMT.format(dt_) +
-      ' · ' + f + '°F · ' + condText(W.code) +
-      ' · ' + COMPASS[Math.round(W.windDir / 45) % 8] + ' ' + mph + ' mph' +
-      (BIRDS.aloft >= 500 ? ' · ' + BIRDS.aloft.toLocaleString('en-US') + ' birds migrating' : '') +
-      (BIRDS.passed >= 2000 ? ' · ' + BIRDS.passed.toLocaleString('en-US') + ' crossed tonight' +
-        (BIRDS.pct !== null ? ' <span class="off">(' + ordinal(BIRDS.pct) + ' pctile)</span>' : '') : '') +
-      (HIST.active ? ' <span class="off">· replaying ' + HIST.day + '</span>'
-        : scrubMin !== 0 ? ' <span class="off">· sun ' + (scrubMin > 0 ? '+' : '−') + (Math.abs(scrubMin) / 60).toFixed(1) + 'h</span>' : '') +
-      (W.offline && !HIST.active ? ' <span class="off">· weather offline</span>' : '');
+    const t = TIME_FMT.format(dt_).split(/\s+/); // ICU may emit U+202F before AM/PM
+    const hh = +HOUR_FMT.format(dt_).split(':')[0];
+    chT.innerHTML = t[0] + '<small>' + (t[1] || '') + '</small>';
+    chD.textContent = WD_FMT.format(dt_);
+    chTp.textContent = f + '°F';
+    chWx.textContent = condIcon(W.code, hh >= 20 || hh < 6);
+    chC.textContent = condText(W.code);
+    chW.textContent = COMPASS[Math.round(W.windDir / 45) % 8];
+    chWL.textContent = 'Wind · ' + mph + ' mph';
+    const x = [];
+    if (BIRDS.aloft >= 500) x.push(BIRDS.aloft.toLocaleString('en-US') + ' birds migrating');
+    if (BIRDS.passed >= 2000) x.push(BIRDS.passed.toLocaleString('en-US') + ' crossed tonight' +
+      (BIRDS.pct !== null ? ' (' + ordinal(BIRDS.pct) + ' pctile)' : ''));
+    if (HIST.active) x.push('replaying ' + HIST.day);
+    else if (scrubMin !== 0) x.push('sun ' + (scrubMin > 0 ? '+' : '−') + (Math.abs(scrubMin) / 60).toFixed(1) + 'h');
+    if (W.offline && !HIST.active) x.push('weather offline');
+    chX.textContent = x.join(' · ');
+    chX.style.display = x.length ? 'block' : 'none';
   }
   function computeLate() {
     const p = HOUR_FMT.format(new Date(nowMs())).split(':');
