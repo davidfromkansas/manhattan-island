@@ -277,6 +277,10 @@
     stroke-linejoin:round; stroke-linecap:round; filter:drop-shadow(0 0 1px rgba(5,61,43,.6)); }
   #vitals .vrow { display:flex; justify-content:space-between; align-items:baseline; gap:16px; padding:1px 0; white-space:nowrap; color:#000; }
   #vitals .vrow b { color:#000; }
+  #vitals .vval { display:inline-flex; align-items:center; gap:6px; } /* radial ratio ring + number */
+  #vitals .vring { width:15px; height:15px; flex:none; transform:rotate(-90deg); } /* arc starts at 12 o'clock */
+  #vitals .vring circle { fill:none; stroke:#c3d5ee; stroke-width:3.5; } /* track = the denominator */
+  #vitals .vring .fg { stroke:#2e6bc4; stroke-linecap:round; transition:stroke-dasharray .6s; } /* fill = numerator */
   body.photo #vitals, body.manual #vitals { opacity:0; pointer-events:none; }
   body.agent #vitals, body.focusmode #vitals { display:none; }
   @media (max-width: 900px) { #vitals { display:none; } }
@@ -4646,6 +4650,7 @@ const fly = (() => {
   return { tick, enter, exit, st, _pos: () => camera.position.toArray().map(v => Math.round(v)) };
 })();
 window.__fly = fly; // dev/testing hook
+window.__controls = controls; // dev/testing hook (control-feel diagnostics)
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
@@ -5489,7 +5494,7 @@ const flights = (() => {
   // display altitude: true below 1500 m, compressed above so even FL380 cruisers
   // fly under the cloud deck (asymptote 4500 < deck 5200). Physics/labels stay true.
   // floor 160 m: baro altimeters read near/below 0 on final — keep every plane clearly airborne
-  const dispY = a => Math.max(160, a < 1500 ? a : 1500 + 3000 * (1 - Math.exp(-(a - 1500) / 4000)));
+  const dispY = a => 1.15 * Math.max(160, a < 1500 ? a : 1500 + 3000 * (1 - Math.exp(-(a - 1500) / 4000))); // ×1.15: fly the whole air layer 15% higher
   const planes = new Map();  // hex → record
   const list = [];           // active records, array for allocation-free iteration
   const freeSlots = []; for (let i = FN - 1; i >= 0; i--) freeSlots.push(i);
@@ -9103,8 +9108,8 @@ function frame() {
   // a 28 km scene. Floor the effective zoom/pan speed once the orbit radius drops
   // under ~260 m; 1× above that, so browsing-altitude feel is unchanged.
   const _cd = camera.position.distanceTo(controls.target);
-  controls.zoomSpeed = Math.min(6, Math.max(1, 260 / _cd));
-  controls.panSpeed = Math.min(4, Math.max(1, 260 / _cd));
+  controls.zoomSpeed = Math.min(16, Math.max(1, 520 / _cd)); // ~26 m/tick floor, held down to minDistance
+  controls.panSpeed = Math.min(10, Math.max(1, 520 / _cd));
   if (!fly.st.on) controls.update();
   // keep the camera out of the ground / water
   if (camera.position.y < 6) camera.position.y = 6;
@@ -9163,18 +9168,26 @@ function frame() {
     '<polyline points="' + ECG_PTS + '"/></g></svg></div>' + [
     ['vResidents', '🧍 Residents'],
     ['vEvents', '🚧 Road closures'],
-    ['vSubway', '🚇 Trains rolling'],
-    ['vBuses', '🚌 Buses moving'],
-    ['vFerries', '⛴️ Ferries underway'],
+    ['vSubway', '🚇 Trains rolling', 1],   // 1 = ratio row: radial ring, fill/track = numerator/denominator
+    ['vBuses', '🚌 Buses moving', 1],
+    ['vFerries', '⛴️ Ferries underway', 1],
     ['vAir', '✈️ Aircraft tracked'],
-    ['vBikes', '🚲 Bikes available'],
+    ['vBikes', '🚲 Bikes available', 1],
     ['vCams', '📷 Traffic cams'],
     ['vSpeed', '🚦 Avg road speed'],
     ['vBirds', '🐦 Birds aloft (radar est.)']
-  ].map(([id, lab]) => '<div class="vrow" id="r_' + id + '"><span>' + lab + '</span><b id="' + id + '">—</b></div>').join('');
+  ].map(([id, lab, ring]) => '<div class="vrow" id="r_' + id + '"><span>' + lab + '</span>' +
+    (ring ? '<span class="vval"><svg class="vring" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8"/>' +
+      '<circle class="fg" cx="10" cy="10" r="8" id="' + id + '_ring"/></svg><b id="' + id + '">—</b></span>'
+      : '<b id="' + id + '">—</b>') + '</div>').join('');
   const put = (id, txt, show = true) => {
     document.getElementById(id).textContent = txt;
     document.getElementById('r_' + id).style.display = show ? '' : 'none';
+  };
+  const RING_C = 2 * Math.PI * 8; // r=8 in the 20×20 viewBox
+  const setRing = (id, num, den) => {
+    const f = den > 0 ? Math.min(1, Math.max(0, num / den)) : 0;
+    document.getElementById(id + '_ring').style.strokeDasharray = (f * RING_C).toFixed(2) + ' ' + RING_C.toFixed(2);
   };
   function updateVitals() {
     let rep = 0; for (const p of personas.list) rep += p.rep || 0;
@@ -9185,10 +9198,13 @@ function frame() {
     put('vEvents', fmt(cl) + (inc ? ' (+' + fmt(inc) + ' incident' + (inc > 1 ? 's' : '') + ')' : ''));
     let dwell = 0; for (const tr of subway.trips.values()) if (tr.dwellFeed) dwell++;
     put('vSubway', fmt(subway.trips.size - dwell) + ' / ' + fmt(subway.trips.size) + ' trains');
+    setRing('vSubway', subway.trips.size - dwell, subway.trips.size);
     let bm = 0; for (const b of buses.list) if (b.spd > 0.4) bm++;
     put('vBuses', fmt(bm) + ' / ' + fmt(buses.list.length) + ' buses');
+    setRing('vBuses', bm, buses.list.length);
     let fu = 0; for (const f of ferries.list) if (!f.docked) fu++;
     put('vFerries', fmt(fu) + ' / ' + fmt(ferries.list.length) + ' ferries');
+    setRing('vFerries', fu, ferries.list.length);
     let heli = 0; for (const p of flights.list) if (p.kind === 'heli') heli++;
     put('vAir', fmt(flights.list.length) + ' aircraft' + (heli ? ' (' + heli + ' 🚁)' : ''));
     // available = every docked bike (classic + ebike); total = dock capacity, since the
@@ -9196,6 +9212,7 @@ function frame() {
     let bikes = 0, cap = 0;
     for (const s of citibike.stations) { if (!s.on) continue; bikes += (s.bikes || 0) + (s.ebikes || 0); cap += s.cap || 0; }
     put('vBikes', fmt(bikes) + ' / ' + fmt(cap) + ' bikes');
+    setRing('vBikes', bikes, cap);
     put('vCams', fmt(cams.list.length) + ' cams');
     let spdS = 0, spdN = 0; for (const L of rtraffic.links) if (L.speed != null) { spdS += L.speed; spdN++; }
     put('vSpeed', Math.round(spdS / spdN) + ' mph', spdN > 0);
