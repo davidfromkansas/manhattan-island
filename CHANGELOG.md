@@ -6,6 +6,37 @@ the rules on adding entries.
 
 ---
 
+## 🏝️ Governors Island, for real
+
+**Shipped:** July 10, 2026
+
+**TL;DR:** Governors Island's five placeholder prisms are now the island's real building
+fabric from the city's 3D model, plus a sculpted terrain with The Hills park and Fort
+Jay's star rampart on its glacis.
+
+**What you'll see:** From the harbor or the Island preset: ~90 real buildings — Castle
+Williams' circular drum on the northwest shore, the Brooklyn-Battery Tunnel vent drum
+on the north tip, Liggett Hall's quarter-mile bar crossing the island, Nolan Park and
+hospital rows, Colonels Row — with a 4-pointed star fort rising on a mounded glacis at
+Fort Jay, and the four Hills (Outlook, Discovery, Slide, Grassy) lifting the southern
+parkland up to ~21 m, trees riding the slopes.
+
+**How it works:** Building geometry comes from the
+[NYC DCP 3D city model](https://www.nyc.gov/site/planning/data-maps/open-data/dwn-nyc-3d-model-download.page)
+(tile `nyc_3dmodel_mn01` — Governors Island is Manhattan CD1): 774 facade/rooftop
+surfaces baked offline into scene coordinates through an affine fitted against the
+scene's own `geoRaw` calibration (validated by the DCP shoreline matching the baked
+island ring to within meters), u16-quantized with per-building vertex colors into
+`public/govisland.json` (~205 KB), lazy-fetched into one Lambert mesh. The terrain is a
+14 m grid clipped to the island ring, displaced by five analytic bumps (`GI_HILLS`):
+four for The Hills — which opened in 2016 and so aren't in the 2014-vintage DCP capture;
+positions/heights from the park's published design — and one for Fort Jay's glacis.
+The star rampart and glacis are sculpted, not surveyed (DCP models the fort's interior
+barracks but not its earthworks); the island tree scatter now samples the same hill
+function so trees sit on the slopes instead of inside them. Honest caveat: the DCP
+snapshot predates the park, so a few since-demolished Coast Guard-era barracks still
+stand between the Hills — a 2014 time capsule rather than today's lawn.
+
 ## 💓 City Vitals — a live pulse panel for the whole city
 
 **Shipped:** July 10, 2026
