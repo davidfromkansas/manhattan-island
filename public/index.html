@@ -7688,6 +7688,11 @@ const personas = (() => {
   // ---- persona card ----
   const title = s => s.toLowerCase().replace(/\b[a-z]/g, ch => ch.toUpperCase());
   function open(pp) {
+    // Release any active ride-along (subway/bus/plane/ferry) through its own official
+    // path before we take the camera: those follows cancel on canvas pointerdown, but a
+    // thought-bubble click is a DOM click that never reaches the canvas — without this,
+    // an in-flight follow would keep steering camTween at ITS entity and fight ours.
+    renderer.domElement.dispatchEvent(new PointerEvent('pointerdown'));
     const [, age, female, raceI, orgI, langI, eduI, occI, incK, commI, status] = pp.p;
     const occ = occI >= 0 ? title(D.occs[occI]) : ['', 'Looking For Work', 'Retired', 'Student', ''][status] || '';
     const head = (occ || 'Resident') + ', ' + age;
@@ -7731,7 +7736,10 @@ const personas = (() => {
   }
   function followTick() {
     if (!follow) return;
-    if (!document.body.classList.contains('focusmode')) { follow = null; return; } // view released
+    // release when the view is grabbed OR focus moves to another entity (subway/bus/
+    // plane/ferry chips call focusui.enter too — their own follow-cams must not fight ours)
+    if (!document.body.classList.contains('focusmode') ||
+        (FOCUS.kind || '').indexOf('resident persona') !== 0) { follow = null; return; }
     const [px, pz] = posAt(follow.pp);
     const dx = px - follow.lx, dz = pz - follow.lz;
     follow.lx = px; follow.lz = pz;
