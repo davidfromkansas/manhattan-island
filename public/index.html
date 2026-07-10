@@ -7164,90 +7164,92 @@ const birds = (() => {
 window.__birds = birds; // dev/testing hook
 
 /* ============================================================
-   25h. RESIDENTS — Census PUMS personas. 4,128 real anonymous
-   ACS person records (weighted sample, ~1 per 2,000 residents
-   per PUMA — the crowd IS the distribution) stand in the city as
-   chibi cartoon characters. Placement: seeded rejection sampling
-   inside each persona's PUMA polygon (pums.json rings → geoRaw →
-   landOK), so everyone is on land in the right community district
-   (Staten Island personas auto-skip — no land is built there).
-   One Points draw call, depth-tested so buildings occlude people.
+   25h. RESIDENTS — Census PUMS personas. 12,703 real anonymous
+   ACS person records (weighted sample, ~1 per 650 residents per
+   PUMA — the crowd IS the distribution) stand in the city as
+   voxel box-people (Minecraft-figure look: blocky head, hair cap,
+   torso+arms, legs). Placement: seeded rejection sampling inside
+   each persona's PUMA polygon (pums.json rings → geoRaw → landOK),
+   so everyone is on land in the right community district (Staten
+   Island auto-skips — no land is built there). FOUR instanced
+   draw calls (one per body part) so each part gets its own
+   per-instance color; a shared patched Lambert scales each figure
+   in the VERTEX SHADER by camera distance (planes-style ×1–4,
+   growing from the feet) so people read from browsing altitude
+   with zero per-frame CPU. Depth-tested: buildings occlude people.
    Click → #personaCard side panel + focus context, so the
-   concierge knows who you met. Sprite looks are RANDOM by design —
-   demographics live in the card, never in skin/clothing colors.
+   concierge knows who you met. Looks are RANDOM by design —
+   demographics live in the card, never in skin/hair/clothing.
    Static demographic layer: not gated by HIST (it isn't live data).
    ============================================================ */
 const personas = (() => {
   const card = document.getElementById('personaCard');
   const cardBody = card.querySelector('.pbody'), cardX = card.querySelector('.x');
-  // --- chibi sprite atlas: 8 variants, 64×96 cells, canvas-drawn (no assets) ---
-  const CELLS = 8;
-  const tex = (() => {
-    const c = document.createElement('canvas'); c.width = 64 * CELLS; c.height = 96;
-    const g = c.getContext('2d');
-    const clothes = ['#e2574c', '#4f86c6', '#59a96a', '#e8a558', '#8a6fc8', '#3aa8a0', '#d46a9e', '#95a0ad'];
-    const skins = ['#f1c9a5', '#caa27e', '#8d5a3b', '#5d3a26'];
-    const hairs = ['#2b2320', '#5a3d23', '#977a45', '#8a8f98', '#c94f4f', '#3a3f4a', '#e0d6c2', '#6e4a7e'];
-    for (let i = 0; i < CELLS; i++) {
-      const ox = i * 64;
-      g.save(); g.translate(ox, 0);
-      g.lineWidth = 3; g.strokeStyle = 'rgba(15,18,24,0.9)';
-      // legs
-      g.fillStyle = '#2e3340';
-      g.fillRect(24, 74, 7, 16); g.fillRect(33, 74, 7, 16);
-      // body (clothing)
-      g.fillStyle = clothes[i]; g.beginPath(); g.roundRect(17, 46, 30, 32, 9); g.fill(); g.stroke();
-      // head (skin tone: round-robin, deliberately unrelated to the persona's data)
-      g.fillStyle = skins[i % skins.length]; g.beginPath(); g.arc(32, 28, 17, 0, TAU); g.fill(); g.stroke();
-      // hair: alternating cap / side style
-      g.fillStyle = hairs[i]; g.beginPath();
-      if (i % 2) { g.arc(32, 24, 17, Math.PI, 0); g.fill(); }
-      else { g.arc(32, 26, 17.5, Math.PI * 0.95, Math.PI * 0.05); g.lineTo(49, 34); g.lineTo(15, 34); g.fill(); }
-      // eyes
-      g.fillStyle = '#20242c'; g.beginPath(); g.arc(26, 30, 2, 0, TAU); g.arc(38, 30, 2, 0, TAU); g.fill();
-      g.restore();
-    }
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  })();
-  const PEOPLE = []; // { x, z, cell, kid, p:[rowRef], area, rep }
+  const PEOPLE = []; // { x, z, yaw, w, h, kid, ci, p:[rowRef], area, rep }
   let D = null;      // personas.json tables
-  let mesh = null;
+  // --- voxel figure parts, v2 chibi (H ≈ 7 m — toy-figure scale, like the oversized
+  //     planes): big head with EYES, thin arms + skin hands, shoes, three discrete
+  //     hair styles as separate geometries (buzz/full/topknot — stretch-scaling hair
+  //     would detach from the head under the distance-grow shader) ---
+  const box = (w, h, d, x, y, z) => { const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y, z); return g; };
+  const merge = BufferGeometryUtils.mergeGeometries;
+  const GEO = {
+    skin: merge([box(2.6, 2.3, 2.4, 0, 5.6, 0),                                   // big head (~1/3 of height)
+      box(0.5, 0.55, 0.65, -1.45, 2.28, 0), box(0.5, 0.55, 0.65, 1.45, 2.28, 0)]), // hands
+    eyes: merge([box(0.3, 0.34, 0.12, -0.55, 5.72, 1.21), box(0.3, 0.34, 0.12, 0.55, 5.72, 1.21)]),
+    shirt: merge([box(2.2, 2.5, 1.35, 0, 3.45, 0),                                 // torso (narrower than head)
+      box(0.6, 2.05, 0.75, -1.45, 3.6, 0), box(0.6, 2.05, 0.75, 1.45, 3.6, 0)]),   // thin arms
+    legs: merge([box(0.85, 1.75, 0.95, -0.52, 1.45, 0), box(0.85, 1.75, 0.95, 0.52, 1.45, 0)]),
+    shoes: merge([box(0.95, 0.6, 1.3, -0.52, 0.3, 0.12), box(0.95, 0.6, 1.3, 0.52, 0.3, 0.12)]),
+    hair0: box(2.8, 0.6, 2.6, 0, 6.75, 0),                                         // buzz cut
+    hair1: merge([box(2.8, 0.95, 2.6, 0, 6.85, 0), box(2.8, 1.7, 0.6, 0, 6.0, -1.15)]), // full (cap + back)
+    hair2: merge([box(2.8, 0.95, 2.6, 0, 6.85, 0), box(2.8, 1.7, 0.6, 0, 6.0, -1.15),
+      box(0.85, 0.8, 0.85, 0, 7.65, -0.2)])                                        // topknot / bun
+  };
+  const SHIRTS = ['#2ea8a0', '#ff8a3d', '#3d9be9', '#ffc93d', '#e8503a', '#7a5fd0', '#6fbf4d', '#ff6fa5', '#f2f0e8', '#274a6d'].map(c => new THREE.Color(c));
+  const PANTS = ['#274a6d', '#5a4632', '#2ea8a0', '#333a47', '#7a5fd0', '#8a2f3d', '#3d6b4f', '#c46a2e'].map(c => new THREE.Color(c));
+  const SKINS = ['#f6cfa4', '#d8a678', '#9a6238', '#63402a'].map(c => new THREE.Color(c)); // round-robin — never data-mapped
+  const HAIRS = ['#2b2320', '#6b4423', '#e8a13d', '#ff5a2e', '#c9c2b8', '#3a3f4a', '#e8d23d', '#7a4a8e'].map(c => new THREE.Color(c));
+  const SHOES = ['#3a2e26', '#20242c', '#c9463a', '#e8e4da', '#274a6d', '#6b4423'].map(c => new THREE.Color(c));
+  const EYE = new THREE.Color('#20242c');
+  // shared material: Lambert + slight emissive (night) + shader-side distance scale from the feet
+  const pMat = new THREE.MeshLambertMaterial({ emissive: 0x9aa4b8, emissiveIntensity: 0.14 });
+  pMat.customProgramCacheKey = () => 'voxpeople';
+  pMat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', `
+      vec3 iOrigin = (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz;
+      float pk = clamp(distance(iOrigin, cameraPosition) / 900.0, 1.0, 4.0);
+      transformed *= pk; // grow from the feet with distance — findable, planes-style
+      #include <project_vertex>`);
+  };
   function build() {
-    const n = PEOPLE.length;
-    const pos = new Float32Array(n * 3), cell = new Float32Array(n), kid = new Float32Array(n);
-    PEOPLE.forEach((pp, i) => { pos[i * 3] = pp.x; pos[i * 3 + 1] = 4.5; pos[i * 3 + 2] = pp.z;
-      cell[i] = pp.cell; kid[i] = pp.kid; });
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setAttribute('aCell', new THREE.BufferAttribute(cell, 1));
-    g.setAttribute('aKid', new THREE.BufferAttribute(kid, 1));
-    const mat = new THREE.ShaderMaterial({
-      uniforms: { uMap: { value: tex }, uDpr: { value: renderer.getPixelRatio() } },
-      transparent: true, depthTest: true, depthWrite: true, // buildings occlude people
-      vertexShader: `uniform float uDpr; attribute float aCell; attribute float aKid;
-        varying float vCell; varying float vA;
-        void main() {
-          vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          float d = -mv.z;
-          vCell = aCell;
-          vA = smoothstep(6800.0, 4200.0, d);       // visible from browsing altitude, not just the sidewalk
-          gl_PointSize = clamp(34000.0 / d, 8.0, 42.0) * uDpr * (aKid > 0.5 ? 0.72 : 1.0);
-          gl_Position = projectionMatrix * mv;
-        }`,
-      fragmentShader: `uniform sampler2D uMap; varying float vCell; varying float vA;
-        void main() {
-          if (vA < 0.03) discard;
-          // pre-flip x: the presentation mirror (scaleX(-1)) flips point sprites back
-          vec2 uv = vec2((vCell + (1.0 - gl_PointCoord.x)) / ${CELLS}.0, gl_PointCoord.y);
-          vec4 c = texture2D(uMap, uv);
-          if (c.a < 0.5) discard;
-          gl_FragColor = vec4(c.rgb, c.a * vA);
-        }`
-    });
-    mesh = new THREE.Points(g, mat);
-    mesh.frustumCulled = false; mesh.renderOrder = 5; mesh.matrixAutoUpdate = false;
-    scene.add(mesh);
+    const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
+    const YUP = new THREE.Vector3(0, 1, 0);
+    const styleOf = (pp) => pp.ci % 7 === 3 ? -1 : pp.ci % 3;   // 1-in-7 bald; else buzz/full/topknot
+    const groups = { skin: PEOPLE, eyes: PEOPLE, shirt: PEOPLE, legs: PEOPLE, shoes: PEOPLE,
+      hair0: PEOPLE.filter(pp => styleOf(pp) === 0), hair1: PEOPLE.filter(pp => styleOf(pp) === 1),
+      hair2: PEOPLE.filter(pp => styleOf(pp) === 2) };
+    for (const [key, list] of Object.entries(groups)) {
+      if (!list.length) continue;
+      const im = new THREE.InstancedMesh(GEO[key], pMat, list.length);
+      im.frustumCulled = false; im.matrixAutoUpdate = false;
+      list.forEach((pp, i) => {
+        const s = (pp.kid ? 0.55 : 0.92 + (pp.ci % 5) * 0.045); // height variety (kids small)
+        _q.setFromAxisAngle(YUP, pp.yaw);
+        _p.set(pp.x, 1.1, pp.z);
+        _s.set(s * pp.w, s, s * pp.w);
+        _m.compose(_p, _q, _s);
+        im.setMatrixAt(i, _m);
+        im.setColorAt(i, key === 'skin' ? SKINS[pp.ci % SKINS.length]
+          : key === 'eyes' ? EYE
+          : key === 'shirt' ? SHIRTS[pp.ci % SHIRTS.length]
+          : key === 'legs' ? PANTS[(pp.ci * 5 + 2) % PANTS.length]
+          : key === 'shoes' ? SHOES[pp.ci % SHOES.length]
+          : HAIRS[(pp.ci * 3 + 1) % HAIRS.length]);
+      });
+      im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+      scene.add(im);
+    }
   }
   // ---- load + placement (once; seeded → identical crowd every visit) ----
   Promise.all([fetch('personas.json').then(r => r.json()), fetch('pums.json').then(r => r.json())])
@@ -7272,8 +7274,9 @@ const personas = (() => {
         for (const r of p.rings) for (const [x, y] of r) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
         bbox.set(p.id, [x0, x1, y0, y1]);
       }
-      let placed = 0, ci = 0;
+      let placed = 0, ci = 0, rowN = 0;
       for (const row of pj.people) {
+        if (TIER === 'low' && (rowN++ % 2)) continue; // phones: half the crowd (~350k tris instead of ~700k)
         const pu = byId.get(row[0]); if (!pu) continue;
         const bb = bbox.get(row[0]);
         for (let t = 0; t < 16; t++) {
@@ -7281,8 +7284,9 @@ const personas = (() => {
           if (!inRings(lon, lat, pu.rings)) continue;
           const g2 = subway.geoRaw(lat, lon);
           if (!landOK(g2.x, g2.z)) continue;
-          PEOPLE.push({ x: g2.x, z: g2.z, cell: (ci++) % CELLS, kid: row[1] < 15 ? 1 : 0,
-            p: row, area: pu.name + ' (' + pu.boro + ')', rep: pj.repPer[String(row[0])] || 2000 });
+          PEOPLE.push({ x: g2.x, z: g2.z, yaw: R() * TAU, w: 0.88 + R() * 0.28, ci: ci++,
+            kid: row[1] < 15 ? 1 : 0, p: row, area: pu.name + ' (' + pu.boro + ')',
+            rep: pj.repPer[String(row[0])] || 650 });
           placed++; break;
         }
       }

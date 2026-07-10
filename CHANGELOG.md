@@ -41,7 +41,7 @@ lowest income).
 
 ---
 
-## 🧍 Meet the residents — 7,233 clickable Census personas on the streets
+## 🧍 Meet the residents — 7,261 clickable Census personas on the streets
 
 **Shipped:** July 9, 2026
 
@@ -50,8 +50,9 @@ real, anonymous Census respondent placed in their own community district. Click 
 to read who they are; the crowd's makeup matches the city's actual demographics.
 
 **What you'll see:**
-- Small chibi characters dot the sidewalks and blocks — visible from browsing
-  altitude, sharper as you descend (buildings hide and reveal them as you move). Click one → a card:
+- Small voxel New Yorkers — big-headed low-poly figures with eyes, varied hair
+  styles and bright outfits — dot the sidewalks and blocks, visible from browsing
+  altitude and sharper as you descend (buildings hide and reveal them as you move). Click one → a card:
   "Medical Assistants, 49 — she lives in the Pelham Parkway / Morris Park (Bronx)
   area — Hispanic/Latino, born in the Dominican Republic. Speaks Spanish at home.
   High school graduate. Personal income ≈ $65k/yr. Commutes by bus or rail." Every
@@ -67,12 +68,13 @@ to read who they are; the crowd's makeup matches the city's actual demographics.
 [ACS 2023 1-Year PUMS](https://www.census.gov/programs-surveys/acs/microdata.html)
 (A-Res reservoir sampling by person weight) with occupations, origins, languages,
 education, income and commute decoded from the official Census data dictionary.
-The client seeds each persona inside its PUMA polygon on built land — one instanced
-draw call of canvas-drawn sprites, depth-tested so the city occludes people
-naturally. **Honest caveats:** these are real anonymized microdata records, not
+The client seeds each persona inside its PUMA polygon on built land and renders
+the crowd as instanced 3D voxel figures (eight draw calls total — body parts plus
+three hair styles), scaled up gently with distance so people stay findable from
+altitude. **Honest caveats:** these are real anonymized microdata records, not
 named individuals — no names are invented; the characters' looks (skin, hair,
 clothes) are RANDOM by design and never encode demographics — the data lives only
-in the card; 7,233 of 12,703 sampled records appear because personas only stand
+in the card; 7,261 of 12,703 sampled records appear because personas only stand
 where the twin has built land (Staten Island and the city's far edges are
 under-represented visually — the Concierge's polling numbers remain complete and
 unaffected).

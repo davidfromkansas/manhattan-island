@@ -40,7 +40,7 @@ city state; a timeline slider scrubs the city back through the last 7 days.
 | `public/buildings.json` | 304,911 real building footprint boxes (BIN ids) |
 | `public/boundaries.json` | 5 borough + 262 real 2020-NTA neighborhood polygons (lon/lat rings; client converts via `subway.geoRaw`). Powers agent region context + boundary layers. |
 | `public/pums.json` | 55 NYC 2020-PUMA demographic profiles (weighted ACS 2023 1-Year PUMS) + borough/city rollups + NTA→PUMA crosswalk + PUMA polygons. Powers the concierge `demographics`/`compare_areas`/`rank_areas` tools + income/etc. choropleths. Baked offline (keyless Census bulk), no runtime key. |
-| `public/personas.json` | 4,128 real anonymous PUMS person records (weighted sample ~1 per 2,000 residents/PUMA) → the clickable chibi residents (index.html §25h: one Points draw call, seeded in-PUMA placement via landOK, #personaCard + focus context). |
+| `public/personas.json` | 12,703 real anonymous PUMS person records (weighted sample ~1 per 650 residents/PUMA) → the clickable voxel residents (index.html §25h: 8 InstancedMesh draw calls sharing one distance-grow Lambert, seeded in-PUMA placement via landOK, #personaCard + focus context; looks are random by design, never demographic-mapped). |
 
 ## Run + test locally
 
