@@ -1215,12 +1215,30 @@ const F_WTOWER = 1, F_HVAC = 2, F_CORNICE = 4, F_FIRESC = 8, F_TALL = 16;
    ALL generation below builds on real geometry. These indexes are
    also the future agent-query substrate (edge/node/block ids).
    ============================================================ */
-let [SG_DATA, BLK_DATA, BLDG, QN_CLAIMS] = await Promise.all([ // let: build-time data, released after generation (PERF.md C1)
+let [SG_DATA, BLK_DATA, BLDG, QN_CLAIMS, QN_EAST_RAW] = await Promise.all([ // let: build-time data, released after generation (PERF.md C1)
   fetch('streets.json').then(r => r.json()),
   fetch('blocks.json').then(r => r.json()),
   fetch('buildings.json').then(r => r.json()), // 305k REAL buildings as oriented boxes (one-time local bake)
-  fetch('qn-claims.json').then(r => r.ok ? r.json() : []).catch(() => []) // Queens Tier-A claim circles (suppress replaced boxes; missing file = no claims)
+  fetch('qn-claims.json').then(r => r.ok ? r.json() : []).catch(() => []), // Queens Tier-A claim circles (suppress replaced boxes; missing file = no claims)
+  fetch('qn-east-land.json').then(r => r.ok ? r.json() : null).catch(() => null) // eastern Queens land bitmask (CD6/CD7 + Glendale: off-plate real fabric)
 ]);
+// Eastern Queens land mask (Flushing/College Point/Whitestone/Rego Park/Forest Hills/
+// Glendale): a packed occupancy bitmask from the baked building coverage — coast-accurate
+// (buildings stop at the shore). Enables landOK (streets + residents) AND suppresses the
+// ~1,800 stray boxes there, since the qn-*.json chunks are the real fabric.
+let QN_EAST = null;
+if (QN_EAST_RAW) {
+  const a = atob(QN_EAST_RAW.bits), bytes = new Uint8Array(a.length);
+  for (let i = 0; i < a.length; i++) bytes[i] = a.charCodeAt(i);
+  QN_EAST = { x0: QN_EAST_RAW.x0, z0: QN_EAST_RAW.z0, cell: QN_EAST_RAW.cell, w: QN_EAST_RAW.w, h: QN_EAST_RAW.h, bytes };
+}
+function inQnEast(x, z) {
+  if (!QN_EAST) return false;
+  const gx = ((x - QN_EAST.x0) / QN_EAST.cell) | 0, gz = ((z - QN_EAST.z0) / QN_EAST.cell) | 0;
+  if (gx < 0 || gx >= QN_EAST.w || gz < 0 || gz >= QN_EAST.h) return false;
+  const bit = gx * QN_EAST.h + gz;
+  return (QN_EAST.bytes[bit >> 3] & (128 >> (bit & 7))) !== 0;
+}
 // Queens DCP claims: one circle per baked Tier-A building — the box fabric inside a
 // circle is replaced by real massing from the qn-*.json chunks. 60 m cell hash.
 const QN_CLAIM_HASH = new Map();
@@ -2018,6 +2036,7 @@ const riIslContains = makeContains(QB.ISL.ri);
 function landOK(x, z) {
   if (bayContains(x, z)) return false;
   { const qw = qwShoreX(z); if (qw !== null && x < qw && !riIslContains(x, z)) return false; } // East Channel is water (real DCP bank)
+  if (typeof inQnEast === 'function' && inQnEast(x, z)) return true;   // eastern Queens real-fabric land (CD6/CD7 + Glendale)
   if (z > 12800 && z < 21500) { // Harlem corridor: keep east of the visual channel
     const ee = Math.max(bxShoreX(z) ?? -1e9, coastAt(Math.min(z, 21000)).e + 40) + 12;
     if (x < ee) return false;
@@ -3141,6 +3160,7 @@ const NECKLACE = []; // bridge/arch light positions (consumed by section 21's em
     if (onLand(x, z)) continue;                            // Manhattan boxes feed B in generateCity
     if (inQnDcp(x, z)) continue;                           // Queens DCP chunks render real massing (qn-*.json)
     if (inQnClaim(x, z)) continue;                         // box replaced by a baked Tier-A building
+    if (inQnEast(x, z)) continue;                          // eastern Queens: baked chunk fabric replaces boxes
     if (!landB(x, z)) continue;
     if (!onPlate(x, z) && !islets.some(([P]) => polyContains(P, x, z))) continue; // iron rule 2: painted plate or islet under every box
     const [h0, h1, gl, palN] = recipeB(x, z);
@@ -3162,6 +3182,7 @@ const NECKLACE = []; // bridge/arch light positions (consumed by section 21's em
     if (inInner(o.cx, o.cz)) continue;                    // real footprints own the inner zone
     if (inQnDcp(o.cx, o.cz)) continue;                    // Queens DCP chunks own their fabric
     if (inQnClaim(o.cx, o.cz)) continue;                  // block face replaced by baked Tier-A massing
+    if (inQnEast(o.cx, o.cz)) continue;                   // eastern Queens: baked chunk fabric
     if (!landB(o.cx, o.cz)) continue;
     if (blk.a < 1500 || o.w < 24 || o.l < 24) continue;   // traffic islands
     const rec = recipeB(o.cx, o.cz);
@@ -3222,6 +3243,17 @@ const NECKLACE = []; // bridge/arch light positions (consumed by section 21's em
   loadBakedMesh('qn-corona.json', 0);     // Corona / Corona Heights
   loadBakedMesh('qn-elmhurst.json', 0);   // Elmhurst / Lefrak City
   loadBakedMesh('qn-rikers.json', 0);     // Rikers Island complex
+  // Queens part 3: CD5 east + CD6 + CD7 (Glendale, Rego Park, Forest Hills, Flushing,
+  // College Point, Whitestone, Bayside) — off-plate real fabric (Tier-A mesh + Tier-B
+  // footprint extrusions + coast-clipped ground) east of the old borough plate edge.
+  loadBakedMesh('qn-ridgewood.json', 0);  // Ridgewood/Maspeth/Middle Village hero buildings
+  loadBakedMesh('qn-glendale.json', 0);   // Glendale (off-plate CD5 sliver)
+  loadBakedMesh('qn-regopark.json', 0);   // Rego Park
+  loadBakedMesh('qn-foresthills.json', 0);// Forest Hills / Forest Hills Gardens
+  loadBakedMesh('qn-flushing.json', 0);   // Downtown/East Flushing / Murray Hill / Queensboro Hill
+  loadBakedMesh('qn-collegept.json', 0);  // College Point / Malba
+  loadBakedMesh('qn-whitestone.json', 0); // Whitestone / Beechhurst / Clearview
+  loadBakedMesh('qn-bayside.json', 0);    // Auburndale / Bay Terrace / Waldheim edge
 }
 
 /* ============================================================
@@ -7885,17 +7917,18 @@ const birds = (() => {
 window.__birds = birds; // dev/testing hook
 
 /* ============================================================
-   25w. LinkNYC kiosks — a slowly rotating 3D soccer ball floats
-   above each kiosk location. Coords come from public/linknyc.json
-   (lat/lon), placed via subway.geoRaw and gated to modeled land
-   (iron rule 2). The ball is one InstancedMesh sharing a
-   soccer-pattern icosphere (12 black patches at the icosahedron
-   vertices = a truncated-icosahedron read); each ball spins in
-   place in the vertex shader off cityUniforms.uTime, so the whole
-   set costs one draw call and zero per-frame CPU.
+   25w. LinkNYC kiosks — the marker at each location is the REAL
+   kiosk model (baked from linkkiosk.obj, nearest-16 instanced)
+   with a soccer ball hovering just above it; both spin at the
+   SAME rate (0.5 rad/s) in the vertex shader off
+   cityUniforms.uTime — one draw call each, zero per-frame CPU.
+   Coords come from public/linknyc.json (lat/lon), placed via
+   subway.geoRaw and gated to modeled land (iron rule 2). The
+   ball is a soccer-pattern icosphere (12 black patches at the
+   icosahedron vertices = a truncated-icosahedron read).
    ============================================================ */
 const linknyc = (() => {
-  const R = 16, BALL_Y = LAND_Y + 115;               // big ball floating high in the sky, like the subway beacons
+  const R = 8, KFLOAT = 149.5, BALL_H = KFLOAT + 42; // kiosk floats 30% higher than the old marker height; ball rides just above the now-32 m kiosk
   // --- soccer-pattern geometry: white sphere, black patches toward the 12 icosa vertices ---
   const geo = new THREE.IcosahedronGeometry(R, 2).toNonIndexed();
   const pos = geo.attributes.position;
@@ -7935,12 +7968,12 @@ const linknyc = (() => {
     for (const k of rows) {
       const g = subway.geoRaw(k.la, k.lo);
       if (!onLand(g.x, g.z) && !landOK(g.x, g.z)) continue; // off the modeled scene → skip
-      placed.push([g.x, g.z, k.n || 'LinkNYC kiosk']);
+      placed.push([g.x, g.z, k.n || 'LinkNYC kiosk', onLand(g.x, g.z) ? LAND_Y : 1.25]);
     }
     if (!placed.length) return;
     mesh = new THREE.InstancedMesh(geo, mat, placed.length);
     mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;
-    placed.forEach(([x, z], i) => { _p.set(x, BALL_Y, z); _m.compose(_p, _q, _s); mesh.setMatrixAt(i, _m); });
+    placed.forEach(([x, z, , gy], i) => { _p.set(x, gy + BALL_H, z); _m.compose(_p, _q, _s); mesh.setMatrixAt(i, _m); });
     mesh.instanceMatrix.needsUpdate = true;
     scene.add(mesh);
     console.log('[linknyc]', placed.length, 'of', rows.length, 'kiosk balls placed');
@@ -7964,40 +7997,115 @@ const linknyc = (() => {
   ring.renderOrder = 7; ring.visible = false;
   scene.add(ring);
   function focusKiosk(i) { // click a ball → dive to its kiosk, ring it, pin the focus chip
-    const [x, z, name] = placed[i];
-    const gy = onLand(x, z) ? LAND_Y : 1.25;
+    const [x, z, name, gy] = placed[i];
     ring.position.set(x, gy + 0.6, z);
     ring.visible = true;
     setFocus('LinkNYC kiosk (static city list)', name, { name }, () => [x, gy, z]);
     focusui.enter(() => [x, gy + 26, z], '<b>⚽ LinkNYC kiosk</b><br>' + String(name).replace(/</g, '&lt;'));
     camTween = { p0: camera.position.clone(), t0: controls.target.clone(),
-      p1: new THREE.Vector3(x + 70, 170, z - 240), t1: new THREE.Vector3(x, 8, z), t: 0, dur: 1.6 };
+      p1: new THREE.Vector3(x + 90, 200, z - 300), t1: new THREE.Vector3(x, 70, z), t: 0, dur: 1.6 }; // frame the floating kiosk stack + the ground ring
   }
   // ball picking: click (not drag) → nearest ball within 30 px (cams pattern —
   // the mirror shim already delivers camera-space coords, so plain NDC compares)
   const _kv = new THREE.Vector3(), _kd = new THREE.Vector3();
   let kX = 0, kY = 0, kT = 0;
   renderer.domElement.addEventListener('pointerdown', (e) => { kX = e.clientX; kY = e.clientY; kT = performance.now(); });
+  // capture phase + stopImmediatePropagation: a hit on a marker CLAIMS the click, so
+  // the resident/cam pickers (registered later, some after fetches) never also fire
+  // for it; a miss passes the event through untouched
   renderer.domElement.addEventListener('pointerup', (e) => {
     if (!placed.length || document.pointerLockElement) return;
     if (performance.now() - kT > 450 || Math.hypot(e.clientX - kX, e.clientY - kY) > 7) return;
     camera.getWorldDirection(_kd);
-    let best = -1, bd = 30 * 30;
+    let best = -1, bd = 26 * 26;
     for (let i = 0; i < placed.length; i++) {
-      _kv.set(placed[i][0] - camera.position.x, BALL_Y - camera.position.y, placed[i][1] - camera.position.z);
+      _kv.set(placed[i][0] - camera.position.x, placed[i][3] + BALL_H - camera.position.y, placed[i][1] - camera.position.z);
       if (_kv.dot(_kd) < 0) continue; // behind the camera
-      _kv.set(placed[i][0], BALL_Y, placed[i][1]).project(camera);
+      _kv.set(placed[i][0], placed[i][3] + BALL_H, placed[i][1]).project(camera);
       const sx = (_kv.x * 0.5 + 0.5) * innerWidth, sy = (-_kv.y * 0.5 + 0.5) * innerHeight;
       const d = (sx - e.clientX) * (sx - e.clientX) + (sy - e.clientY) * (sy - e.clientY);
       if (d < bd) { bd = d; best = i; }
     }
-    if (best >= 0) focusKiosk(best);
-  });
+    if (best >= 0) { e.stopImmediatePropagation(); focusKiosk(best); }
+  }, true);
+  // --- kiosk marker models: decimated bake of a REAL LinkNYC kiosk
+  //     (public/linkkiosk.json, 7.7k tris, cm units → ×0.105 = 32 m tall,
+  //     twice the ball's diameter). ONE InstancedMesh; the color
+  //     atlas carries the ad art + part swatches, the glow map keeps the ad
+  //     screens and tablet lit at night. 200 kiosks × 7.7k tris would blow
+  //     the tri budget, so the instances re-point at the nearest kiosks once
+  //     a second — beyond ~2.6 km the soccer ball overhead stays the marker.
+  const KCAP = 16, KRANGE = 2600, KSCALE = 0.105; // 305 cm model -> 32 m tall (2x the ball's diameter)
+  let kMesh = null;
+  Promise.all([
+    fetch('linkkiosk.json').then(r => r.json()),
+    new Promise(res => new THREE.TextureLoader().load('linkkiosk-atlas.png', res)),
+    new Promise(res => new THREE.TextureLoader().load('linkkiosk-glow.png', res)),
+  ]).then(([J, kmap, kglow]) => {
+    const n = J.n * 3;
+    const pos = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+    const [mn, mx] = J.bbox;
+    for (let i = 0; i < n; i++) {
+      for (let a = 0; a < 3; a++) pos[i * 3 + a] = (J.pos[i * 3 + a] / 65535) * (mx[a] - mn[a]) + mn[a];
+      uv[i * 2] = J.uv[i * 2] / 65535; uv[i * 2 + 1] = J.uv[i * 2 + 1] / 65535;
+    }
+    const kg = new THREE.BufferGeometry();
+    kg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    kg.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    kg.computeVertexNormals(); // non-indexed → flat shading (right look for panels)
+    kmap.colorSpace = THREE.SRGBColorSpace; kglow.colorSpace = THREE.SRGBColorSpace;
+    const km = new THREE.MeshLambertMaterial({ map: kmap, emissive: 0xffffff, emissiveMap: kglow,
+      emissiveIntensity: 0.85, side: THREE.DoubleSide }); // OBJ winding varies
+    km.customProgramCacheKey = () => 'linkkioskspin';
+    km.onBeforeCompile = (sh) => { // same 0.5 rad/s yaw as the ball above — they turn together
+      sh.uniforms.uTime = cityUniforms.uTime;
+      const rot = `float _ka = uTime * 0.5; float _kc = cos(_ka), _kn = sin(_ka);
+        mat3 _kr = mat3(_kc,0.0,_kn, 0.0,1.0,0.0, -_kn,0.0,_kc);`;
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uTime;')
+        .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n' + rot + '\nobjectNormal = _kr * objectNormal;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = _kr * transformed;');
+    };
+    kMesh = new THREE.InstancedMesh(kg, km, KCAP);
+    kMesh.count = 0; kMesh.frustumCulled = false; kMesh.matrixAutoUpdate = false;
+    scene.add(kMesh);
+    console.log('[linknyc] kiosk model loaded:', J.n, 'tris, nearest-' + KCAP + ' instancing');
+  }).catch(e => console.warn('[linknyc] kiosk model load failed', e));
+  const _km = new THREE.Matrix4(), _kp2 = new THREE.Vector3(), _kq = new THREE.Quaternion(),
+    _ks = new THREE.Vector3(KSCALE, KSCALE, KSCALE), _ke = new THREE.Euler();
+  let kLast = 0;
+  function kioskLOD() { // re-point the instance pool at the nearest kiosks (1 Hz)
+    if (!kMesh || !placed.length) return;
+    const now = performance.now();
+    if (now - kLast < 1000) return;
+    kLast = now;
+    const cx = camera.position.x, cz = camera.position.z;
+    const near = [];
+    for (let i = 0; i < placed.length; i++) {
+      const dx = placed[i][0] - cx, dz = placed[i][1] - cz;
+      const d = dx * dx + dz * dz;
+      if (d < KRANGE * KRANGE) near.push([d, i]);
+    }
+    near.sort((a, b) => a[0] - b[0]);
+    const cnt = Math.min(KCAP, near.length);
+    for (let k = 0; k < cnt; k++) {
+      const i = near[k][1], [x, z, , gy] = placed[i];
+      _kp2.set(x, gy + KFLOAT, z);
+      _ke.set(0, (iHash(i, 11) % 628) / 100, 0); // stable per-kiosk yaw
+      _kq.setFromEuler(_ke);
+      _km.compose(_kp2, _kq, _ks);
+      kMesh.setMatrixAt(k, _km);
+    }
+    kMesh.count = cnt;
+    kMesh.instanceMatrix.needsUpdate = true;
+  }
   function tick() { // ring lives exactly as long as the kiosk focus (any exit path)
     if (ring.visible && !(document.body.classList.contains('focusmode') && (FOCUS.kind || '').startsWith('LinkNYC')))
       ring.visible = false;
+    kioskLOD();
   }
-  return { count: () => mesh ? mesh.count : 0, _pos: () => placed, ballY: BALL_Y, tick, _focus: focusKiosk };
+  return { count: () => mesh ? mesh.count : 0, _pos: () => placed, ballH: BALL_H, tick, _focus: focusKiosk,
+    _kiosks: () => kMesh ? kMesh.count : 0 };
 })();
 window.__linknyc = linknyc; // dev/testing hook
 
@@ -9667,7 +9775,7 @@ const concierge = (() => {
   const panel = document.getElementById('agentPanel');
   { // starter-prompt chips: tap to ask without typing; hidden after the first send
     const chips = document.getElementById('agentChips');
-    for (const c of ['Find nearest LinkNYC Kiosk in Soho', 'show me Times Square', 'how are the trains right now?', 'fly me along the Hudson']) {
+    for (const c of ['Find nearest LinkNYC Kiosk in Soho', 'Take me to the Metropolitan Museum of Art', 'how are the trains right now?', 'fly me along the Hudson']) {
       const b = document.createElement('button');
       b.type = 'button'; b.textContent = c;
       b.addEventListener('click', () => { chips.style.display = 'none'; send(c); });

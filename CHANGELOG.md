@@ -6,6 +6,38 @@ the rules on adding entries.
 
 ---
 
+## 🌏 Queens goes real, part 3: the eastern half — Flushing to Forest Hills
+
+**Shipped:** July 11, 2026
+
+**TL;DR:** The scene's world now extends east past its old edge to cover CD5–CD7 —
+Glendale, Rego Park, Forest Hills, Forest Hills Gardens, downtown & east Flushing,
+Murray Hill, Queensboro Hill, College Point, Malba, Whitestone, Beechhurst, Clearview,
+Auburndale, Bay Terrace — with ~53,000 real buildings, coast-accurate ground, streets,
+and residents where there used to be open water.
+
+**What you'll see:** a whole new eastern Queens: downtown Flushing's density around Main
+St, the Forest Hills/Rego Park apartment spine along Queens Blvd, Forest Hills Gardens'
+low houses, and the College Point / Whitestone / Bayside peninsulas reaching to the East
+River and LI Sound. Real building shapes (not boxes), the shoreline hugging the actual
+coast (Flushing Bay and the Sound stay water), Q-borough streets drawn, and Census
+residents now living out there (their thought bubbles name College Point, Flushing…).
+
+**How it works:** these neighborhoods sat **east of the scene's land edge** (the borough
+plate stopped at x≈8800), and unlike western Queens they had almost no building boxes to
+keep — so the pipeline changed: a rooftop-anchored bake emits **Tier-A full massing** for
+hero buildings and **Tier-B footprint extrusions** for the low fabric (real plan-shape +
+height), each chunk carrying its own **coast-clipped ground plate** derived from where its
+buildings actually are. A packed **land bitmask** (`qn-east-land.json`, 8 KB, built from
+the same coverage) turns those areas into land — enabling street ribbons and resident
+placement — and suppresses the ~1,800 stray boxes there. Geometry via the exact-geoRaw
+replica from all three eastern tiles (QN05–07), which ship without render meshes, so every
+surface is sampled from its NURBS plane. **Honest caveats:** this is a heavy add (~26 MB
+across 8 lazy-loaded chunks — the eastern half of a borough is a lot of buildings); the
+low fabric is flat-topped extrusions; the 2017–18 snapshot predates recent Flushing towers;
+and a follow-up LOD/decimation pass could lighten the download (recorded in
+plan-queens-dcp.md).
+
 ## 📍 The Concierge learns every place name: "take me to Black Cat LES" just works
 
 **Shipped:** July 11, 2026
