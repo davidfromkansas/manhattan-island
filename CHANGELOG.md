@@ -6,6 +6,37 @@ the rules on adding entries.
 
 ---
 
+## 🏘️ Queens goes real, part 2: seven districts of true buildings + Rikers
+
+**Shipped:** July 11, 2026
+
+**TL;DR:** Every notable building across Queens CD1–CD4 — Astoria, Ditmars, Steinway,
+Ravenswood, Queensbridge, Sunnyside, Woodside, Blissville, Jackson Heights, East
+Elmhurst, Corona, Elmhurst, Lefrak City — plus the Rikers Island complex, now renders
+its real surveyed massing from the city's 3D model.
+
+**What you'll see:** ~3,900 real buildings across seven new districts: the
+Queensbridge Houses' Y-blocks, the Ravenswood generating station under its
+candy-striped stacks, the real Steinway piano factory, Jackson Heights' garden-
+apartment perimeter blocks with their interior courtyards, Lefrak City's tower
+cluster, Elmhurst Hospital, and the Rikers jail complex on its island. Everything
+else (the low rowhouse fabric) remains real-footprint boxes as before — every
+replaced box is suppressed, so nothing doubles. The hand-built ConEd turbine halls,
+Steinway factory box and Silvercup block retired in favor of the real geometry
+(the candy-stripe stacks and factory chimney stay).
+
+**How it works:** Tier-A extraction from all four DCP tiles (QN01–QN04, ~649k
+surfaces scanned): buildings taller than ~26 m or larger than ~1,100 m² (thresholds
+tuned per district — Jackson Heights' 6-story blocks needed 17 m) bake as full
+massing via the exact-geoRaw pipeline into seven lazy `qn-*.json` chunks (~6 MB
+total, one draw call each, city window shader via baked seed/kind). QN03/QN04 ship
+without embedded render meshes, so those surfaces are sampled from the underlying
+NURBS planes. A build-time `qn-claims.json` (one circle per baked building, 3,881
+claims) suppresses exactly the boxes being replaced — measured: ~9,400 procedural
+boxes retired. Honest caveats: the low fabric is still oriented boxes (real
+footprint, real height, no facade detail); the 2017–18 snapshot predates recent
+towers; LGA stays the stylized hand-build (the real terminals postdate the data).
+
 ## ⚽ Click a soccer ball, meet its LinkNYC kiosk
 
 **Shipped:** July 11, 2026

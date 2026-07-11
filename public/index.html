@@ -1215,11 +1215,31 @@ const F_WTOWER = 1, F_HVAC = 2, F_CORNICE = 4, F_FIRESC = 8, F_TALL = 16;
    ALL generation below builds on real geometry. These indexes are
    also the future agent-query substrate (edge/node/block ids).
    ============================================================ */
-let [SG_DATA, BLK_DATA, BLDG] = await Promise.all([ // let: build-time data, released after generation (PERF.md C1)
+let [SG_DATA, BLK_DATA, BLDG, QN_CLAIMS] = await Promise.all([ // let: build-time data, released after generation (PERF.md C1)
   fetch('streets.json').then(r => r.json()),
   fetch('blocks.json').then(r => r.json()),
-  fetch('buildings.json').then(r => r.json()) // 305k REAL buildings as oriented boxes (one-time local bake)
+  fetch('buildings.json').then(r => r.json()), // 305k REAL buildings as oriented boxes (one-time local bake)
+  fetch('qn-claims.json').then(r => r.ok ? r.json() : []).catch(() => []) // Queens Tier-A claim circles (suppress replaced boxes; missing file = no claims)
 ]);
+// Queens DCP claims: one circle per baked Tier-A building — the box fabric inside a
+// circle is replaced by real massing from the qn-*.json chunks. 60 m cell hash.
+const QN_CLAIM_HASH = new Map();
+for (const c of QN_CLAIMS) {
+  const [ccx, ccz, cr] = c;
+  for (let gx = ((ccx - cr) / 60) | 0; gx <= ((ccx + cr) / 60) | 0; gx++)
+    for (let gz = ((ccz - cr) / 60) | 0; gz <= ((ccz + cr) / 60) | 0; gz++) {
+      const key = gx * 100000 + gz;
+      if (!QN_CLAIM_HASH.has(key)) QN_CLAIM_HASH.set(key, []);
+      QN_CLAIM_HASH.get(key).push(c);
+    }
+}
+QN_CLAIMS = null; // release
+function inQnClaim(x, z) {
+  const arr = QN_CLAIM_HASH.get((((x / 60) | 0) * 100000) + ((z / 60) | 0));
+  if (!arr) return false;
+  for (const [ccx, ccz, cr] of arr) { const dx = x - ccx, dz = z - ccz; if (dx * dx + dz * dz < cr * cr) return true; }
+  return false;
+}
 const G_NODES = SG_DATA.nodes, G_EDGES = SG_DATA.edges; // runtime substrate — kept forever
 let G_BLOCKS = BLK_DATA.blocks;                          // build-time only — released after 19d
 const G_COUNTS = { edges: G_EDGES.length, nodes: G_NODES.length, blocks: G_BLOCKS.length };
@@ -2945,15 +2965,11 @@ const NECKLACE = []; // bridge/arch light positions (consumed by section 21's em
       }
     }
   }
-  // Con Ed Astoria: turbine halls + candy-stripe stacks
-  pushBoxG(SC, L.conedA[0], L.conedA[1], 1.7, 26, 190, 90, -0.35, [0.58, 0.56, 0.54], 0.4, -1, [0.5, 0.49, 0.48]);
-  pushBoxG(SC, L.conedB[0], L.conedB[1], 1.7, 20, 130, 70, -0.35, [0.55, 0.52, 0.50], 0.4, -1);
+  // Con Ed Astoria: candy-stripe stacks kept — the turbine halls, the Steinway piano
+  // factory and the Silvercup block now come from real DCP massing (qn-astoria /
+  // qn-ravenswood Tier-A chunks); their hand-built boxes retired with it.
   for (let i = 0; i < 4; i++) pushPrism(SC, L.conedA[0] - 60 + i * 42, L.conedA[1] + 30 - i * 12, 1.7, 82 + (i % 2) * 8, 5.5, 4.5, 8, 0, i % 2 ? [0.82, 0.30, 0.26] : [0.85, 0.83, 0.80], 0.3, -1);
-  // Steinway piano factory: brick works + stack
-  pushBoxG(SC, L.steinwayF[0], L.steinwayF[1], 1.7, 15, 130, 60, 0.25, [0.50, 0.30, 0.22], 0.3, 0);
-  pushPrism(SC, L.steinwayF[0] + 50, L.steinwayF[1] + 25, 1.7, 40, 3.5, 2.8, 8, 0, [0.45, 0.27, 0.20], 0.3, -1);
-  // Silvercup sign block (LIC edge)
-  pushBoxG(SC, L.silvercup[0], L.silvercup[1], 1.7, 22, 90, 50, -0.26, [0.52, 0.36, 0.26], 0.4, 0);
+  pushPrism(SC, L.steinwayF[0] + 50, L.steinwayF[1] + 25, 1.7, 40, 3.5, 2.8, 8, 0, [0.45, 0.27, 0.20], 0.3, -1); // factory chimney stays
   // Yankee Stadium at its TRUE anchor: limestone bowl + field + light masts
   pushPrism(SC, L.yankee[0], L.yankee[1], 1.7, 26, 128, 118, 20, 0.44, [0.82, 0.80, 0.76], 0.4, -1, [0.30, 0.48, 0.30]);
   for (let i = 0; i < 6; i++) { const a2 = i / 6 * TAU;
@@ -3124,6 +3140,7 @@ const NECKLACE = []; // bridge/arch light positions (consumed by section 21's em
     const x = BLDG.x[i], z = BLDG.z[i];
     if (onLand(x, z)) continue;                            // Manhattan boxes feed B in generateCity
     if (inQnDcp(x, z)) continue;                           // Queens DCP chunks render real massing (qn-*.json)
+    if (inQnClaim(x, z)) continue;                         // box replaced by a baked Tier-A building
     if (!landB(x, z)) continue;
     if (!onPlate(x, z) && !islets.some(([P]) => polyContains(P, x, z))) continue; // iron rule 2: painted plate or islet under every box
     const [h0, h1, gl, palN] = recipeB(x, z);
@@ -3144,6 +3161,7 @@ const NECKLACE = []; // bridge/arch light positions (consumed by section 21's em
     if (onLand(o.cx, o.cz)) continue;                     // Manhattan handled in generateCity
     if (inInner(o.cx, o.cz)) continue;                    // real footprints own the inner zone
     if (inQnDcp(o.cx, o.cz)) continue;                    // Queens DCP chunks own their fabric
+    if (inQnClaim(o.cx, o.cz)) continue;                  // block face replaced by baked Tier-A massing
     if (!landB(o.cx, o.cz)) continue;
     if (blk.a < 1500 || o.w < 24 || o.l < 24) continue;   // traffic islands
     const rec = recipeB(o.cx, o.cz);
@@ -3195,7 +3213,15 @@ const NECKLACE = []; // bridge/arch light positions (consumed by section 21's em
   console.log('[street-truth]', ribKm.toFixed(0), 'km real streets,', realB, 'REAL borough footprints,', blkN, 'outer blocks,', blkB, 'filler buildings');
   // Queens real-massing chunks: DCP-baked meshes replace the suppressed box fabric
   // inside each QN_RING (exact-geoRaw placement, city window shader via aSeed/aKind).
-  loadBakedMesh('qn-lic.json', 0); // Long Island City / Hunters Point / Court Square
+  loadBakedMesh('qn-lic.json', 0); // Long Island City / Hunters Point / Court Square (full-mesh ring)
+  // Tier-A chunks: hero buildings only; the low fabric stays real-footprint boxes
+  loadBakedMesh('qn-sunnyside.json', 0);  // Sunnyside (+Gardens) / Woodside / Blissville
+  loadBakedMesh('qn-ravenswood.json', 0); // Queensbridge / Ravenswood / Old Astoria / Silvercup
+  loadBakedMesh('qn-astoria.json', 0);    // Astoria / Ditmars / Steinway / ConEd waterfront
+  loadBakedMesh('qn-jacksonhts.json', 0); // Jackson Heights / East Elmhurst / North Corona
+  loadBakedMesh('qn-corona.json', 0);     // Corona / Corona Heights
+  loadBakedMesh('qn-elmhurst.json', 0);   // Elmhurst / Lefrak City
+  loadBakedMesh('qn-rikers.json', 0);     // Rikers Island complex
 }
 
 /* ============================================================

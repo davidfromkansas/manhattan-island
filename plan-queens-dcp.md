@@ -103,13 +103,15 @@ lazy-fetched chunks of ~1–1.5 MB each. Two tiers per chunk, decided per buildi
   tower, Queensbridge Houses' Y-shaped blocks, Ravenswood Generating Station, Steinway
   factory, Sunnyside rail-yard structures, churches, schools, industrial Blissville.
   Bake like FiDi: weld 6 cm, u16 quantize, per-block grade rebase.
-- **Tier B — footprint extrusion.** The low rowhouse/vinyl-siding fabric (the vast
-  majority of the 357k surfaces): extrude the DCP **footprint polygon** to the DCP
-  **roof height** — one prism per building (10–20 tris) instead of 30+ facade patches.
-  This is still lore-accurate in plan-shape, height, and street alignment — a
-  quantum jump over today's procedural boxes — at ~5% of the triangle cost. Ear-clip
-  triangulation for caps (footprints are simple polygons; guard against the occasional
-  degenerate/self-intersecting ring by falling back to the convex hull).
+- **Tier B — REVISED during implementation: keep the existing real-footprint boxes.**
+  The original plan extruded DCP footprints for the low fabric, but `buildings.json`
+  already renders every borough building as a real-footprint oriented box (position,
+  size, rotation, height from city data) — extrusions would mostly duplicate it for
+  ~2M triangles. So the low fabric KEEPS the existing boxes, and each chunk ships a
+  compact claims list (`qn-claims.json`: one circle per Tier A building) that
+  suppresses only the boxes a baked building replaces. `qn-claims.json` loads in the
+  build-time `Promise.all` (top-level await) so claims exist before generation; the
+  meshes stay lazy. LIC keeps its ring-wide full-mesh treatment (already shipped).
 
 Chunk boundaries (geo polygons → scene rings via the fitted affines; store each ring
 in the JSON like `fidi.json` does):
