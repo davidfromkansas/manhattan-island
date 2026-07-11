@@ -155,19 +155,22 @@
   #ticker i.sep { color:#9fb6da; font-style:normal; }
   @keyframes tkscroll { from { transform:translateX(0); } to { transform:translateX(-50%); } }
   body.photo #ticker, body.focusmode #ticker, body.manual #ticker { display:none !important; }
-  @media (max-width: 700px) { /* no ticker on phones → bar drops back; toolbar scrolls instead of clipping */
+  @media (max-width: 700px) { /* phones: entity nav becomes an icon-only vertical column on the right, above David */
     #ticker { display:none !important; }
     #ui {
-      bottom:0; left:0; transform:none; border-radius:0; /* flush with the bottom edge, full width */
-      max-width:100vw; padding-bottom:calc(7px + env(safe-area-inset-bottom, 0px)); /* buttons clear the home bar */
-      overflow-x:auto; overflow-y:hidden;
-      -webkit-overflow-scrolling:touch; scrollbar-width:none; scroll-snap-type:x proximity;
-      -webkit-mask-image:linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 16px), transparent);
-      mask-image:linear-gradient(90deg, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+      left:auto; right:8px; transform:none; bottom:calc(134px + env(safe-area-inset-bottom, 0px));
+      flex-direction:column; gap:7px; max-width:none;
+      background:none; border:none; padding:0; backdrop-filter:none; -webkit-backdrop-filter:none;
     }
-    #ui::-webkit-scrollbar { display:none; }
-    #ui .grp, #ui .sep, #ui button { flex:none; }
-    #presets button { min-height:42px; scroll-snap-align:center; }
+    #ui .sep, #ui #photo { display:none; } /* tour restart drops off mobile — the tour auto-runs on load */
+    #ui .grp { flex-direction:column; gap:8px; }
+    #presets .lbl { display:none; }              /* icons only */
+    #presets button {
+      width:48px; height:48px; padding:0; font-size:22px; border-radius:14px;
+      display:flex; align-items:center; justify-content:center;
+      background:rgba(10,13,20,.62); border:1px solid rgba(255,255,255,.16);
+      backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    }
   }
   #thoughtTicker { /* resident-thought marquee — stacked right above the headlines */
     position:fixed; left:0; right:0; bottom:34px; z-index:9; height:30px; display:none;
@@ -272,7 +275,7 @@
   #agentFab img { display:block; width:100%; pointer-events:none; }
   #agentFab img.talk { position:absolute; left:14%; bottom:8%; width:72%; } /* pill overlaps his chest, per the source art */
   #agentFab:hover { transform:scale(1.05) translateY(-2px); }
-  @media (max-width: 600px) { #agentFab { width:84px; right:6px; bottom:calc(84px + env(safe-area-inset-bottom, 0px)); } } /* fully clear the mobile control bar (it was sitting on the Traffic Cam button) */
+  @media (max-width: 600px) { #agentFab { width:84px; right:6px; bottom:0; } } /* flush with the bottom edge */
   #camDial { /* Sims-style movement dial above the concierge: up/down/left/right + zoom, click or hold */
     position:fixed; right:22px; bottom:216px; z-index:31; width:112px; height:112px;
     user-select:none; -webkit-user-select:none; touch-action:none;
@@ -477,17 +480,17 @@
 <body>
 <div id="ui">
   <div class="grp" id="presets"><!-- live-entity ride-alongs (camera presets stay on keys 0-6) -->
-    <button data-e="air" title="Ride along with a live aircraft">✈️ Air</button>
-    <button data-e="subway" title="Ride along with a live train">🚇 Subways</button>
-    <button data-e="ferry" title="Ride along with a live NYC Ferry">⛴️ Ferries</button>
-    <button data-e="bus" title="Ride along with a live MTA bus">🚌 Buses</button>
-    <button data-e="bike" title="Visit a live Citi Bike station">🚲 Citi Bikes</button>
-    <button data-e="cam" title="Watch a live NYC traffic camera">📷 Traffic Cam</button>
-    <button data-e="birds" title="Ride with a radar migration flock">🐦 Birds</button>
+    <button data-e="air" title="Ride along with a live aircraft">✈️<span class="lbl"> Air</span></button>
+    <button data-e="subway" title="Ride along with a live train">🚇<span class="lbl"> Subways</span></button>
+    <button data-e="ferry" title="Ride along with a live NYC Ferry">⛴️<span class="lbl"> Ferries</span></button>
+    <button data-e="bus" title="Ride along with a live MTA bus">🚌<span class="lbl"> Buses</span></button>
+    <button data-e="bike" title="Visit a live Citi Bike station">🚲<span class="lbl"> Citi Bikes</span></button>
+    <button data-e="cam" title="Watch a live NYC traffic camera">📷<span class="lbl"> Traffic Cam</span></button>
+    <button data-e="birds" title="Ride with a radar migration flock">🐦<span class="lbl"> Birds</span></button>
   </div>
   <div class="sep"></div>
   <div class="grp"><!-- light mode stays on the L key; quality auto-tiers (hash q= overrides) -->
-    <button id="photo" title="Photo mode (P)">&#128247;</button>
+    <button id="photo" title="Auto-tour Manhattan (photo mode: P)">&#127916;</button>
   </div>
 </div>
 <div id="hint">drag orbit &middot; scroll to dive &middot; WASD to fly &middot; keys 0&ndash;6 views &middot; L light &middot; P photo</div>
