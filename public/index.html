@@ -61,17 +61,17 @@
     background:rgba(255,255,255,.5); border:1px solid rgba(255,255,255,.6);
     transform:translate(-50%,-50%); pointer-events:none;
   }
-  #credit { display:none; } /* attribution badge — mobile top-right only */
-  @media (max-width: 700px) {
-    #credit {
-      display:block; position:fixed; z-index:11;
-      top:calc(10px + env(safe-area-inset-top, 0px)); right:calc(8px + env(safe-area-inset-right, 0px));
-      font:600 11px/1.2 system-ui, -apple-system, sans-serif; color:rgba(255,255,255,.92); text-decoration:none;
-      background:rgba(10,13,20,.55); border:1px solid rgba(255,255,255,.15); border-radius:10px; padding:5px 9px;
-      backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); touch-action:manipulation;
-    }
+  #credit { /* attribution badge — shared style; positioned per breakpoint below */
+    display:block; position:fixed; z-index:11;
+    font:600 11px/1.2 system-ui, -apple-system, sans-serif; color:rgba(255,255,255,.92); text-decoration:none;
+    background:rgba(10,13,20,.55); border:1px solid rgba(255,255,255,.15); border-radius:10px; padding:5px 9px;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); touch-action:manipulation;
   }
-  body.photo #credit { display:none !important; } /* clean screenshots */
+  @media (min-width: 701px) { #credit { top:227px; right:12px; } } /* desktop: just below City Vitals */
+  @media (max-width: 700px) { /* phones: top-right corner */
+    #credit { top:calc(10px + env(safe-area-inset-top, 0px)); right:calc(8px + env(safe-area-inset-right, 0px)); }
+  }
+  body.photo #credit, body.agent #credit, body.focusmode #credit { display:none !important; } /* clean screenshots + declutter */
   body.touchnav #joy { display:block; }
   #lockbtn {
     position:fixed; right:16px; bottom:112px; z-index:30; width:46px; height:46px;
