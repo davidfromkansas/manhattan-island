@@ -6,6 +6,31 @@ the rules on adding entries.
 
 ---
 
+## 📍 The Concierge learns every place name: "take me to Black Cat LES" just works
+
+**Shipped:** July 11, 2026
+
+**TL;DR:** Ask the City Concierge for any named place — a coffee shop, a deli, a venue,
+an address — and it finds the real spot and flies you there. No more needing cross-streets
+for places the agent didn't already know.
+
+**What you'll see:** type "take me to black cat les" and the camera swoops to
+172 Rivington St with a tight glowing ring around the block and a labeled amber pin
+("Black Cat LES · 172 Rivington St"). The reply names the place, its address, and its
+neighborhood. Works for shops, restaurants, bars, landmarks, and street addresses
+anywhere in the city; ambiguous names get the candidates called out.
+
+**How it works:** a new server-side `find_place` tool queries the
+[Google Places API (Text Search)](https://developers.google.com/maps/documentation/places/web-service/text-search)
+— results are hard-restricted to the NYC bounding box, annotated with the containing
+borough and 2020-NTA neighborhood via the twin's own boundary polygons, then handed to
+the existing camera/pin machinery. Place data is Google's index, not a live feed;
+lookups run only inside the Concierge (never a public geocoding endpoint), are cached
+for 24 hours, and are capped daily well inside a hard monthly spend ceiling enforced by
+Google-side quotas. **Honest caveats:** results are only as current as Google's index;
+only Manhattan is fully built, so a match in the outer boroughs may land on stylized
+ground — the Concierge says so when it happens. Place search data © Google.
+
 ## 🚇 The els rise: the 7 and the N/W get their viaducts
 
 **Shipped:** July 11, 2026
