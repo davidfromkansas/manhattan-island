@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Manhattan</title>
 <style>
   html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#141720; }
@@ -345,11 +345,14 @@
       content:''; display:block; flex:none; width:44px; height:4px; margin:0 auto 4px;
       border-radius:2px; background:rgba(255,255,255,.28);
     }
-    #agentForm input { font-size:16px; min-height:44px; } /* 16px stops Safari's focus auto-zoom */
-    #agentForm button { min-width:52px; min-height:44px; font-size:17px; }
-    #agentHead button { min-width:40px; min-height:36px; }
-    #agentLog .m { font-size:13.5px; line-height:1.45; }
-    #agentChips button { min-height:40px; font-size:13px; }
+    /* #agentPanel prefix bumps specificity above the base #agentForm rules below —
+       otherwise the later-in-source base `font:11px` shorthand wins and the 16px
+       (which is what actually stops iOS's focus auto-zoom) never applies */
+    #agentPanel #agentForm input { font-size:16px; min-height:44px; }
+    #agentPanel #agentForm button { min-width:52px; min-height:44px; font-size:17px; }
+    #agentPanel #agentHead button { min-width:40px; min-height:36px; }
+    #agentPanel #agentLog .m { font-size:13.5px; line-height:1.45; }
+    #agentPanel #agentChips button { min-height:40px; font-size:13px; }
   }
   #agentLog { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:5px; scrollbar-width:thin; }
   #agentLog .m { border-radius:9px; padding:4px 8px; max-width:92%; white-space:pre-wrap; word-wrap:break-word; }
@@ -9292,7 +9295,7 @@ const concierge = (() => {
   fab.addEventListener('click', () => {
     const on = document.body.classList.toggle('agent');
     if (on && !greeted) { greeted = true; add('ai', 'Ask me about live NYC — or tell me where to fly, what to map, or when to rewind to. Tap ⓘ for everything I can do.'); }
-    if (on) input.focus();
+    if (on && !matchMedia('(hover: none)').matches) input.focus(); // desktop only — focusing on touch triggers iOS zoom
   });
   // the global keydown handler binds 0–7/H/P/L; typing here must not fly the camera
   input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { document.body.classList.remove('agent'); fab.focus(); } e.stopPropagation(); });
