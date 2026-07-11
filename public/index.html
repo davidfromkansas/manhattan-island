@@ -4549,7 +4549,7 @@ const ui = {
 const autoPan = (() => {
   let on = false, az = 2.4;
   const C = { x: -150, z: 8200 }; // mid-island anchor (Midtown-ish)
-  const mz = matchMedia('(max-width: 700px)').matches ? 1.38 : 1; // phones pull the tour back ~38%
+  const mz = matchMedia('(max-width: 700px)').matches ? 1.587 : 1; // phones pull the tour back ~59%
   function start() {
     camTween = null;
     az = Math.atan2(camera.position.x - C.x, camera.position.z - C.z) || 2.4; // pick up from the current bearing
