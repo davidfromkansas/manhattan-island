@@ -63,7 +63,7 @@
   }
   #brand { /* nycsim.com logo, top-middle */
     position:fixed; top:8px; left:50%; transform:translateX(-50%); z-index:11;
-    width:min(320px, 40vw); pointer-events:auto;
+    width:min(320px, 40vw); pointer-events:none; /* decorative — no reload, clicks pass through to the scene */
     filter:drop-shadow(0 4px 12px rgba(0,10,30,.4));
   }
   #brand img { display:block; width:100%; height:auto; }
@@ -534,7 +534,7 @@
 <div id="wxAlerts"></div>
 </div>
 <div id="vitals"></div>
-<a id="brand" href="https://www.nycsim.com" target="_blank" rel="noopener noreferrer" title="nycsim.com"><img src="nycsim-logo.png" alt="nycsim.com"></a>
+<div id="brand"><img src="nycsim-logo.png" alt="nycsim.com"></div>
 <a id="credit" href="https://www.linkedin.com/in/davidfromkansas/" target="_blank" rel="noopener noreferrer">Made by David Lietjauw</a>
 <div id="ticker"><div class="tkin"></div></div>
 <div id="thoughtTicker"><div class="tkin"></div></div>
@@ -1965,9 +1965,34 @@ function makeShoreX(shx) { // scan lookup — bucket rows can be sparse where th
   };
 }
 const qnShoreX = makeShoreX(QB.QN.shx), bxShoreX = makeShoreX(QB.BX.shx);
+// Western Queens waterfront correction. The stylized QN shore (QB.QN.shx) overshoots
+// up to ~400 m west into the East River along the whole Roosevelt Island channel
+// (LIC through Queensbridge, Ravenswood and Hallets Point), painting empty plate where
+// there should be water. This table is the REAL bank extracted from the DCP tiles'
+// Shoreline linework (QN01+QN02, exact-geoRaw transform), clamped so no existing
+// landOK-governed footprint box loses its ground. It converges with the stylized shore
+// at Astoria (z~10500) where that one was already accurate; QB.QN.bnd/shx stay
+// untouched. Roosevelt Island is exempt from the carve (its buildings ride landOK too).
+const QW_SHX = [[6450, 1760], [6600, 1739], [6750, 1760], [6900, 1728], [7050, 1715],
+  [7200, 1717], [7350, 1741], [7500, 1781], [7650, 1784], [7800, 1797], [7950, 1814],
+  [8100, 1832], [8250, 1836], [8400, 1845], [8550, 1852], [8700, 1856], [8850, 1860],
+  [9000, 1870], [9150, 1874], [9300, 1876], [9450, 1880], [9600, 1896], [9750, 1915],
+  [9900, 1955], [10050, 2054], [10200, 2124], [10350, 1857], [10500, 1778]];
+function qwShoreX(z) {
+  if (z < QW_SHX[0][0] || z > QW_SHX[QW_SHX.length - 1][0]) return null;
+  for (let i = 0; i < QW_SHX.length - 1; i++) {
+    if (z <= QW_SHX[i + 1][0]) {
+      const t = (z - QW_SHX[i][0]) / (QW_SHX[i + 1][0] - QW_SHX[i][0]);
+      return QW_SHX[i][1] + (QW_SHX[i + 1][1] - QW_SHX[i][1]) * t;
+    }
+  }
+  return QW_SHX[QW_SHX.length - 1][1];
+}
+const riIslContains = makeContains(QB.ISL.ri);
 // is this point on borough land the scene actually has? (shared by fills, ribbons, traffic)
 function landOK(x, z) {
   if (bayContains(x, z)) return false;
+  { const qw = qwShoreX(z); if (qw !== null && x < qw && !riIslContains(x, z)) return false; } // East Channel is water (real DCP bank)
   if (z > 12800 && z < 21500) { // Harlem corridor: keep east of the visual channel
     const ee = Math.max(bxShoreX(z) ?? -1e9, coastAt(Math.min(z, 21000)).e + 40) + 12;
     if (x < ee) return false;
@@ -1980,7 +2005,7 @@ function landOK(x, z) {
   return s === null || x > s + 12;
 }
 window.__audit = { coastAt, landOK, bkContains, qnContains, bxContains, bayContains,
-  bkShoreX, qnShoreX, bxShoreX, matchStreet, nearestNode, BK, QB,
+  bkShoreX, qnShoreX, bxShoreX, qwShoreX, riIslContains, matchStreet, nearestNode, BK, QB,
   G: () => G_COUNTS }; // spatial-audit handle (counts captured at load — block data itself is released post-build)
 
 // Roosevelt Island must fit the PINCHED stylized channel: the frozen calibration
@@ -2242,6 +2267,7 @@ function plateEdgeBKQN(z) {
   // westmost land edge at this z: South Bronx shore once it begins (the water
   // between it and Queens is painted by the bay overlay), else the real
   // Brooklyn/Queens shoreline, else the old stylized formula
+  const qw = qwShoreX(z); if (qw !== null) return qw; // western Queens waterfront (real DCP bank)
   const xs = bxShoreX(z);
   if (xs !== null) return Math.max(xs, coastAt(clamp(z, Z_TIP_S + 40, Z_TIP_N - 40)).e + 120) + 15;
   const bs = bkShoreX(z), qs = qnShoreX(z);
@@ -7806,13 +7832,13 @@ const linknyc = (() => {
         transformed = mat3(1.0,0.0,0.0, 0.0,0.924,-0.383, 0.0,0.383,0.924) * transformed;`);       // fixed ~22° tilt → tumbling axis
   };
   let mesh = null;
-  const placed = [];
+  const placed = []; // [x, z, name]
   fetch('linknyc.json').then(r => r.json()).then(rows => {
     const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1,1,1);
     for (const k of rows) {
       const g = subway.geoRaw(k.la, k.lo);
       if (!onLand(g.x, g.z) && !landOK(g.x, g.z)) continue; // off the modeled scene → skip
-      placed.push([g.x, g.z]);
+      placed.push([g.x, g.z, k.n || 'LinkNYC kiosk']);
     }
     if (!placed.length) return;
     mesh = new THREE.InstancedMesh(geo, mat, placed.length);
@@ -7822,7 +7848,59 @@ const linknyc = (() => {
     scene.add(mesh);
     console.log('[linknyc]', placed.length, 'of', rows.length, 'kiosk balls placed');
   }).catch(e => console.warn('[linknyc] load failed', e));
-  return { count: () => mesh ? mesh.count : 0, _pos: () => placed, ballY: BALL_Y };
+  // --- kiosk focus ring: small glowing ground halo. Deliberately kiosk-scale
+  //     (the real object is phone-booth sized): 6.5→9.5 m radii — smaller than the
+  //     16 m ball overhead, but still readable from the dive camera. LinkNYC cyan,
+  //     additive, with a breathing pulse in the vertex shader (zero per-frame CPU,
+  //     same uTime pattern as the ball spin above). ---
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0x4fd6ff, transparent: true, opacity: 0.85,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  ringMat.customProgramCacheKey = () => 'linkring';
+  ringMat.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = cityUniforms.uTime;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        transformed.xz *= 1.0 + 0.10 * sin(uTime * 2.6);`);
+  };
+  const ring = new THREE.Mesh(new THREE.RingGeometry(6.5, 9.5, 48).rotateX(-Math.PI / 2), ringMat);
+  ring.renderOrder = 7; ring.visible = false;
+  scene.add(ring);
+  function focusKiosk(i) { // click a ball → dive to its kiosk, ring it, pin the focus chip
+    const [x, z, name] = placed[i];
+    const gy = onLand(x, z) ? LAND_Y : 1.25;
+    ring.position.set(x, gy + 0.6, z);
+    ring.visible = true;
+    setFocus('LinkNYC kiosk (static city list)', name, { name }, () => [x, gy, z]);
+    focusui.enter(() => [x, gy + 26, z], '<b>⚽ LinkNYC kiosk</b><br>' + String(name).replace(/</g, '&lt;'));
+    camTween = { p0: camera.position.clone(), t0: controls.target.clone(),
+      p1: new THREE.Vector3(x + 70, 170, z - 240), t1: new THREE.Vector3(x, 8, z), t: 0, dur: 1.6 };
+  }
+  // ball picking: click (not drag) → nearest ball within 30 px (cams pattern —
+  // the mirror shim already delivers camera-space coords, so plain NDC compares)
+  const _kv = new THREE.Vector3(), _kd = new THREE.Vector3();
+  let kX = 0, kY = 0, kT = 0;
+  renderer.domElement.addEventListener('pointerdown', (e) => { kX = e.clientX; kY = e.clientY; kT = performance.now(); });
+  renderer.domElement.addEventListener('pointerup', (e) => {
+    if (!placed.length || document.pointerLockElement) return;
+    if (performance.now() - kT > 450 || Math.hypot(e.clientX - kX, e.clientY - kY) > 7) return;
+    camera.getWorldDirection(_kd);
+    let best = -1, bd = 30 * 30;
+    for (let i = 0; i < placed.length; i++) {
+      _kv.set(placed[i][0] - camera.position.x, BALL_Y - camera.position.y, placed[i][1] - camera.position.z);
+      if (_kv.dot(_kd) < 0) continue; // behind the camera
+      _kv.set(placed[i][0], BALL_Y, placed[i][1]).project(camera);
+      const sx = (_kv.x * 0.5 + 0.5) * innerWidth, sy = (-_kv.y * 0.5 + 0.5) * innerHeight;
+      const d = (sx - e.clientX) * (sx - e.clientX) + (sy - e.clientY) * (sy - e.clientY);
+      if (d < bd) { bd = d; best = i; }
+    }
+    if (best >= 0) focusKiosk(best);
+  });
+  function tick() { // ring lives exactly as long as the kiosk focus (any exit path)
+    if (ring.visible && !(document.body.classList.contains('focusmode') && (FOCUS.kind || '').startsWith('LinkNYC')))
+      ring.visible = false;
+  }
+  return { count: () => mesh ? mesh.count : 0, _pos: () => placed, ballY: BALL_Y, tick, _focus: focusKiosk };
 })();
 window.__linknyc = linknyc; // dev/testing hook
 
@@ -9581,6 +9659,7 @@ function frame() {
   flags.tick(dt, _focus, camY);
   concierge.tick(); // agent-layer label chips track their pins
   focusui.tick();    // the pinned focus dialogue tracks its entity
+  linknyc.tick();    // kiosk focus ring follows focusmode's lifetime
   thoughts.tick();   // §25t Sims-style thought bubbles over residents
   personas.followTick(); // §25h follow-cam rides along with the clicked resident
   chipLimiter.tick(); // phones: cap on-screen transit/incident dialogues at 5
