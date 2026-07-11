@@ -6,6 +6,31 @@ the rules on adding entries.
 
 ---
 
+## 🚇 The els rise: the 7 and the N/W get their viaducts
+
+**Shipped:** July 11, 2026
+
+**TL;DR:** Roosevelt Avenue is finally Roosevelt Avenue — the Flushing line's elevated
+viaduct now runs from the Court Square portal over Queens Blvd and Roosevelt Ave to
+111 St-Corona, and the Astoria line rides above 31st Street from Queensboro Plaza to
+Ditmars, with platforms at all 18 real stations and a two-level Queensboro Plaza.
+
+**What you'll see:** steel viaducts on paired column bents over the real streets —
+the 7 climbing out of its tunnel portal near Court Square, ducking under nothing and
+shadowing everything, station platforms with canopies at 33 St-Rawson through
+103 St-Corona Plaza, the Astoria line's spine up 31st St, and the double-deck
+interchange knot where the two lines cross at Queensboro Plaza.
+
+**How it works:** alignments are the named CSCL street chains from `streets.json`
+(QUEENS BLVD → ROOSEVELT AVE, 31 ST) extracted offline, resampled and smoothed, so
+the decks ride exactly over the drawn streets and the columns land in the roadway —
+zero new data files, one draw call, the scene's existing bridge vocabulary
+(`pushBoxG`/`pushBeam` + the city material). Station positions are the real stops'
+coordinates snapped to the alignment. **Honest caveat:** the structure is stylized
+steel, not riveted-lattice-true, and live 7/N/W trains still render at street level
+under their own viaduct — giving those two routes a deck-height profile is the
+recorded next step (it touches the shared train renderer, so it ships separately).
+
 ## 🏘️ Queens goes real, part 2: seven districts of true buildings + Rikers
 
 **Shipped:** July 11, 2026

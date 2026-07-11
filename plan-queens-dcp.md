@@ -232,7 +232,12 @@ Hand-built landmark reconciliation (all positions in `QB.lm`, ~line 1888; builde
 Also check `RECB`/hood recipes are untouched — they still serve everything outside the
 rings (Jackson Heights, Bronx, etc.).
 
-## 4b. Elevated rail — the 7 and the N/W els (in scope)
+## 4b. Elevated rail — SHIPPED (structure); train-height profile is follow-up
+
+**Status: viaducts + stations shipped July 11, 2026.** Remaining from this section:
+the shared elevation profile so live 7/N/W trains ride the deck instead of street
+level — deferred because the subway renderer is shared with every line and history
+replay (iron rule 5); do it as its own careful change.
 
 Roosevelt Avenue without the 7 viaduct isn't Roosevelt Avenue. Build the two els as
 **procedural viaducts generated at startup** (zero asset bytes, like `buildBridge` /
