@@ -6,6 +6,34 @@ the rules on adding entries.
 
 ---
 
+## 📡 LinkNYC kiosks become real 3D markers
+
+**Shipped:** July 11, 2026
+
+**TL;DR:** Every LinkNYC location is now marked by a real, textured 3D kiosk model
+floating over the street with a soccer ball spinning above it — both turning together.
+Click either one to dive to that exact kiosk, ringed by a glowing halo.
+
+**What you'll see:** At ~180 LinkNYC spots citywide, a scaled-up model of the actual
+kiosk (silver body, black bezels, a live-looking ad on its screen) hovers as a marker
+with a soccer ball rotating just above it, the two spinning at the same rate. From
+altitude they read as floating landmarks; click one and the camera swoops in and frames
+the kiosk clear of the top banner, with a pinned chip naming the corner ("⚠ LinkNYC
+kiosk · 991 Nostrand Ave") and a cyan ring pulsing on the sidewalk below. Click away or
+press Esc to release.
+
+**How it works:** the real kiosk OBJ (83k tris) is decimated offline to a 7.7k-tri bake
+(`public/linkkiosk.json`, u16-quantized) with a hand-authored material atlas
+(`linkkiosk-atlas.png`) and a night-glow map (`linkkiosk-glow.png`) that keeps the ad
+screens and tablet lit after dark. It renders as ONE `InstancedMesh` re-pointed at the
+nearest 16 kiosks each second (200 × 7.7k tris would blow the triangle budget), so the
+whole set stays ~1 draw call. The kiosk shares the ball's vertex-shader spin
+(`uTime * 0.5`) so they turn in lock-step at zero per-frame CPU. Picking runs in the
+pointer capture phase and claims the click on a hit, so a deliberate marker click beats
+a walker underneath. Kiosk coordinates are the same static
+[LinkNYC city list](https://data.cityofnewyork.us/) as before (`public/linknyc.json`) —
+no new data source.
+
 ## 🌏 Queens goes real, part 3: the eastern half — Flushing to Forest Hills
 
 **Shipped:** July 11, 2026
