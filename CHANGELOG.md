@@ -15,17 +15,19 @@ water, and phones now fill the city in around you instead of showing only the 3 
 neighborhoods.
 
 **What you'll see:** along the Hudson and East River, the real waterfront blocks now have
-ground under them (no more buildings at the waterline). On a phone, the skyline fills out —
-you get the 3 nearest neighborhoods in full detail plus ~12 more as lightweight block
-massing, so the city reads as populated rather than sparse.
+ground under them (no more buildings at the waterline). On a phone, the **whole city fills
+in** — the 3 nearest neighborhoods render in full detail and everything else shows as
+lightweight block massing that upgrades to full as you travel there, so there are no flat
+holes.
 
 **How it works:** the island land-plate (and its seawall) now trace `max(coastAt, real
 building edge)`, clamped to ≤70 m, so near-shore blocks are covered — while `coastAt`
 itself stays frozen (it's the shared calibration everything else is pinned to). The edge is
 derived from the baked chunks by `scripts/mn_shore.py`. (Long piers like Hudson River Park
 are left to the water — decking them read as spikes.) On mobile, the streaming LOD ring is
-now on (`DCP_LOD_CAP` 0→8 for the `low` tier): ~12 extra neighborhoods stream as cheap box
-LOD (~6 MB / ~300k tris) — still hard-capped, so the mobile memory budget is unchanged.
+now wide open (`DCP_LOD_CAP` 0→64 for the `low` tier): the entire city (~67 chunks) streams
+as cheap box-LOD (~33 MB, ~0.5 MB each, frustum-culled) so nothing is ever flat — total
+resident ~140 MB, still far under the mobile crash budget.
 
 ---
 

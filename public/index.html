@@ -564,8 +564,9 @@
   body.gba #gbaSS { display:flex; position:absolute; left:50%; top:70%; transform:translate(-50%,-50%); gap:8px; } /* in the gap between the pads — clears the up/down keys and the logo */
   body.gba .ssb {
     -webkit-appearance:none; appearance:none; cursor:pointer; border:none; touch-action:none;
+    display:flex; align-items:center; justify-content:center; line-height:0; /* dead-center the glyph */
     width:28px; height:23px; border-radius:11px;
-    font:800 16px/1 system-ui,sans-serif; color:#fff; text-align:center;
+    font:800 18px system-ui,sans-serif; color:#fff;
     background:linear-gradient(180deg,#f28a3e,#dd6e1e); /* Knicks orange */
     box-shadow:0 2px 3px rgba(10,12,35,.5), inset 0 1px 0 rgba(255,255,255,.22);
   }
@@ -661,7 +662,7 @@
     </svg>
   </div>
   <div id="gbaSS"><!-- elevation +/− as the classic angled Start/Select pills — §26e -->
-    <button class="ssb" data-act="ed" aria-label="descend">–</button>
+    <button class="ssb" data-act="ed" aria-label="descend">−</button>
     <button class="ssb" data-act="eu" aria-label="ascend">+</button>
   </div>
 </div>
@@ -1382,12 +1383,12 @@ function streamDcpChunks() {
     // how many neighborhoods exist (perf #1): the nearest DCP_CAP render FULL detail; the next
     // DCP_LOD_CAP within DCP_LOD_RADIUS render as cheap LOD boxes (~⅓ the tris, perf #3) so the
     // whole city still shows when zoomed out; anything past that is freed. The DCP_KEEP band is
-    // hysteresis so a chunk at the full/LOD boundary doesn't swap-thrash. Mobile keeps a small LOD
-    // ring (12 within 8 km) so the city still fills in around the 3 full-detail neighbourhoods.
+    // hysteresis so a chunk at the full/LOD boundary doesn't swap-thrash. Mobile blankets the city
+    // with box-LOD (nearest ~40) so there are no flat holes; the 3 nearest upgrade to full detail.
     DCP_CAP = TIER === 'low' ? 3 : TIER === 'medium' ? 6 : 16;
-    DCP_LOD_CAP = TIER === 'low' ? 8 : TIER === 'medium' ? 20 : 60;
+    DCP_LOD_CAP = TIER === 'low' ? 64 : TIER === 'medium' ? 48 : 60;
     DCP_LOAD = TIER === 'low' ? 3200 : TIER === 'medium' ? 4800 : 13000;
-    DCP_LOD_RADIUS = TIER === 'low' ? 8000 : 60000;
+    DCP_LOD_RADIUS = TIER === 'low' ? 60000 : 60000;
     _dcpTierSet = true;
   }
   const cx = camera.position.x, cz = camera.position.z;
