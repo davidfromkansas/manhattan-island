@@ -6,6 +6,35 @@ the rules on adding entries.
 
 ---
 
+## 🏙️ Brooklyn: real massing for the waterfront belt + brownstone core, lore-accurate shore
+
+**Shipped:** July 12, 2026
+
+**TL;DR:** Northwest and central Brooklyn — Greenpoint, Williamsburg (North/Southside),
+East Williamsburg, DUMBO, Fulton Ferry, Vinegar Hill, Downtown Brooklyn, Brooklyn Heights,
+Boerum/Cobble Hill, Carroll Gardens, Columbia St, Fort Greene, Navy Yard, Clinton Hill,
+Bed-Stuy (+ Stuyvesant Heights / Tompkins Park N), Gowanus, Park Slope, Red Hook, Sunset
+Park and Windsor Terrace — now render the city's real building massing instead of
+procedural boxes, and the water's edge was rebuilt to hug the real blocks.
+
+**What you'll see:** the dense, fine-grained real fabric of Brooklyn's brownstone blocks
+and waterfront (varied rooflines, real footprints and heights) from Greenpoint down to
+Sunset Park; Prospect Park and Green-Wood keep their green open space with their few real
+structures; and — the point of the exercise — the East River / Buttermilk Channel shoreline
+now follows the actual buildings, so no block spills into the water and the waterfront reads
+correctly along DUMBO, the Navy Yard, Red Hook and the Sunset Park piers.
+
+**How it works:** geometry from six NYC DCP tiles (**BK01/02/03/06/07 + BK_Parks**,
+[NYC 3D model](https://www.nyc.gov/site/planning/data-maps/open-data/dwn-nyc-3d-model-download.page))
+baked through the exact-geoRaw transform into **15 proximity-streamed chunks**
+(~1.3M triangles, ~57 MB total) — the same nearest-first streaming with a hard concurrent
+cap that keeps the memory budget bounded on mobile. An `inBK` ring suppresses the
+procedural box fabric wherever a chunk owns the blocks. The shoreline (`bkShoreX`) was
+tightened to the westernmost baked building per z-band, verified with 0 of ~62k sampled
+building vertices sitting west of the water line.
+
+---
+
 ## 🏙️ Upper East Side + Roosevelt Island: real massing & a lore-accurate East River
 
 **Shipped:** July 11, 2026
