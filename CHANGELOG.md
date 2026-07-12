@@ -6,6 +6,29 @@ the rules on adding entries.
 
 ---
 
+## ⛵ Brooklyn Bridge Park piers + DUMBO / Navy Yard waterfront
+
+**Shipped:** July 12, 2026
+
+**TL;DR:** The Brooklyn Heights → DUMBO → Navy Yard shoreline now has its real
+character — Brooklyn Bridge Park's finger piers reaching into the East River, the
+Fulton Ferry / Empire Fulton Ferry cove between the two bridges, and the Navy Yard
+berths — instead of a flat tan edge.
+
+**What you'll see:** the six green finger piers of Brooklyn Bridge Park (Pier 1 by
+the Brooklyn Bridge down to Pier 6 at Atlantic Ave) with open water in the slips
+between them, a lawn ribbon along the Furman St bulkhead, the Fulton Ferry Landing
+pier and Jane's-Carousel pavilion in the cove between the Brooklyn and Manhattan
+bridges, and berths along the Navy Yard's Wallabout Bay frontage.
+
+**How it works:** the 2018 DCP tile predates the finished park, so these are bespoke
+box geometry (no fan-filled polygons — the earlier shore glitch was a self-overlapping
+park fan, so piers are built as clean boxes). Each pier deck is anchored to the real
+bulkhead (`bkShoreX`) and reaches west over the river, positioned by converting the
+park's real-world coordinates through the scene's geo transform.
+
+---
+
 ## 🏙️ Brooklyn: real massing for the waterfront belt + brownstone core, lore-accurate shore
 
 **Shipped:** July 12, 2026

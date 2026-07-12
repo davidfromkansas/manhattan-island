@@ -2882,6 +2882,31 @@ const midMeshes = [];
     pushBoxG(SG, sx - 70, pz, 0.8, 3.5, 150, 34, 0.25, [0.45, 0.42, 0.38], 0.4, -1, [0.4, 0.38, 0.35]);
     pushBoxG(SC, sx - 55, pz, 4, 11, 90, 22, 0.25, [0.5, 0.33, 0.24], R(), -1); }
   for (let i = 0; i < 6; i++) pushBoxG(SC, ...lm(M.industryCity, (i % 3) * 130 - 120, ((i / 3) | 0) * 90 - 40), 1.9, 21, 110, 60, 0.16, [0.62, 0.58, 0.52], R(), 0);
+  // ---- Brooklyn Bridge Park finger piers + Furman St esplanade (Bklyn Heights waterfront),
+  //      Fulton Ferry / Empire Fulton Ferry (DUMBO, between the bridges), and Navy Yard berths.
+  //      The 2018 DCP tile predates the finished park, so these are bespoke: pier decks reach
+  //      WEST over the river from the real bulkhead (bkShoreX), the lawn ribbon sits just inland.
+  //      Boxes (not fan-filled polys) — no coplanar z-fighting. Own RNG so R()'s order is intact.
+  { const RP = rng(iHash(7, 77));
+    const lawn = [0.24, 0.42, 0.21], lawnR = [0.17, 0.32, 0.15], deck = [0.40, 0.44, 0.36];
+    const piersZ = [430, 565, 700, 835, 965, 1075];               // Pier 1 (by the bridge) → Pier 6 (Atlantic Av)
+    for (let i = 0; i < piersZ.length; i++) {
+      const pz = piersZ[i], sx = bkShoreX(pz); if (sx === null) continue;
+      const len = 178 + (i % 2) * 26, wid = 46;
+      pushBoxG(SG, sx - len / 2 + 6, pz, 0.5, 1.5, len, wid, 0.17, i % 2 ? lawn : deck, RP(), -1, lawnR);
+      if (i === 0) pushBoxG(SC, sx - len * 0.6, pz - 3, 1.8, 34, 42, 30, 0.17, [0.52, 0.47, 0.42], RP(), 0);       // Pier 1 hotel
+      if (i === 1) pushBoxG(SC, sx - len * 0.5, pz, 1.8, 9, 62, 34, 0.17, [0.46, 0.44, 0.42], RP(), -1, [0.4, 0.4, 0.4]); // Pier 2 field house
+    }
+    for (let z = 400; z < 1120; z += 34) { const sx = bkShoreX(z); if (sx === null) continue;
+      pushBoxG(SG, sx + 12, z, 0.6, 1.2, 30, 36, 0.17, lawn, RP(), -1, lawnR); }   // Furman St esplanade lawn ribbon
+    { const sz = 1470, sx = bkShoreX(sz); if (sx !== null) {
+        pushBoxG(SG, sx - 55, sz, 0.5, 1.6, 116, 26, 0.5, deck, RP(), -1);                 // Fulton Ferry Landing pier
+        pushBoxG(SC, sx - 34, sz, 1.8, 8, 40, 20, 0.5, [0.5, 0.42, 0.34], RP(), -1); } }   // Jane's Carousel pavilion
+    for (let z = 1500; z < 1700; z += 34) { const sx = bkShoreX(z); if (sx === null) continue;
+      pushBoxG(SG, sx + 10, z, 0.6, 1.2, 26, 32, 0.4, lawn, RP(), -1, lawnR); }   // Empire Fulton Ferry lawn
+    for (let i = 0; i < 3; i++) { const pz = 1980 + i * 190, sx = bkShoreX(pz); if (sx === null) continue;
+      pushBoxG(SG, sx - 58, pz, 0.7, 2.4, 124, 40, 0.34, [0.44, 0.43, 0.40], RP(), -1, [0.38, 0.38, 0.36]); }  // Navy Yard berths
+  }
   // ---- meshes (3 draw calls)
   const bkCityMat = patchCityMaterial(new THREE.MeshLambertMaterial({ vertexColors: true }), 0);
   // DoubleSide: OSM park rings arrive in either winding; the roof fans must show regardless.
