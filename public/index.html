@@ -492,6 +492,99 @@
      image makes the whole city read like the real map. Pointer x is mirrored back
      in JS so the controls keep their natural feel. */
   canvas.mirrorX { transform: scaleX(-1); }
+
+  /* ============================================================
+     §26e GBA MOBILE SHELL — portrait phones become a Game Boy Advance.
+     The canvas renders only the TOP 2/3 (RENDER_H); this shell owns the
+     bottom 1/3 (height:var(--sh), published from JS so CSS ↔ canvas agree
+     exactly, sidestepping vh/dvh drift). Everything here is inert unless
+     <body class="gba">. All overrides sit AFTER the max-width:700px block,
+     and body.gba raises specificity, so they win cleanly on gba phones. */
+  #gba { display:none; }
+  body.gba #gba {
+    display:block; position:fixed; left:0; right:0; bottom:0; height:var(--sh);
+    z-index:20; user-select:none; -webkit-user-select:none; touch-action:none;
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+    background:
+      radial-gradient(130% 100% at 50% -25%, rgba(255,255,255,.16), transparent 62%),
+      linear-gradient(180deg, #6b73c2 0%, #565ea8 44%, #464d92 100%);
+    border-top:2px solid rgba(18,22,54,.6);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.20), inset 0 -12px 26px rgba(18,22,58,.4);
+  }
+  body.gba #gba::before { /* screen bezel lip — a recessed shadow at the canvas seam */
+    content:''; position:absolute; left:0; right:0; top:-9px; height:9px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(6,8,22,0), rgba(6,8,22,.6));
+  }
+  #gbaBrand { display:none; }
+  body.gba #gbaBrand { /* NYC-SIMULATOR logo printed atop the console face */
+    display:block; position:absolute; top:5px; left:50%; transform:translateX(-50%);
+    width:min(48%, 200px); height:auto; opacity:.97; pointer-events:none;
+    filter:drop-shadow(0 1px 2px rgba(10,14,40,.55));
+  }
+  /* D-pad — a 3×3 grid: 4 directional keys form the cross, center hub fills the joint */
+  #gbaDpad { display:none; }
+  body.gba #gbaDpad {
+    display:grid; position:absolute; left:6%; top:calc(50% + 6px); transform:translateY(-42%);
+    width:126px; height:126px; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr);
+    filter:drop-shadow(0 3px 5px rgba(10,12,35,.5));
+  }
+  body.gba .dp {
+    -webkit-appearance:none; appearance:none; border:none; margin:0; padding:0; cursor:pointer;
+    position:relative; background:linear-gradient(180deg,#3b4055,#22273a);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
+  }
+  body.gba .dp.up    { grid-area:1/2/2/3; border-radius:9px 9px 0 0; }
+  body.gba .dp.left  { grid-area:2/1/3/2; border-radius:9px 0 0 9px; }
+  body.gba .dp.right { grid-area:2/3/3/4; border-radius:0 9px 9px 0; }
+  body.gba .dp.down  { grid-area:3/2/4/3; border-radius:0 0 9px 9px; }
+  body.gba .dp-hub   { grid-area:2/2/3/3; background:#2c3145; box-shadow:inset 0 0 6px rgba(0,0,0,.5); }
+  body.gba .dp::after { /* direction triangle */
+    content:''; position:absolute; left:50%; top:50%; width:0; height:0; opacity:.72;
+  }
+  body.gba .dp.up::after    { transform:translate(-50%,-70%); border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:8px solid #cfd4ee; }
+  body.gba .dp.down::after  { transform:translate(-50%,-30%); border-left:6px solid transparent; border-right:6px solid transparent; border-top:8px solid #cfd4ee; }
+  body.gba .dp.left::after  { transform:translate(-70%,-50%); border-top:6px solid transparent; border-bottom:6px solid transparent; border-right:8px solid #cfd4ee; }
+  body.gba .dp.right::after { transform:translate(-30%,-50%); border-top:6px solid transparent; border-bottom:6px solid transparent; border-left:8px solid #cfd4ee; }
+  body.gba .dp.pressed { background:linear-gradient(180deg,#8f97ff,#5a63c8); }
+  body.gba .dp, body.gba .dp-hub { pointer-events:none; } /* the whole pad is one touch zone (§26e), keys are visual */
+  /* A / B — round buttons, offset diagonally like the hardware (A up-right, B down-left) */
+  #gbaAB { display:none; }
+  body.gba #gbaAB { display:block; position:absolute; right:7%; top:calc(50% + 4px); transform:translateY(-48%); width:132px; height:112px; }
+  body.gba .gbtn {
+    position:absolute; width:54px; height:54px; border-radius:50%; cursor:pointer; border:none;
+    color:rgba(255,255,255,.94); font:800 15px/54px system-ui,sans-serif; text-align:center;
+    background:radial-gradient(circle at 38% 30%, #bb4c74, #7f2449 68%, #611936);
+    box-shadow:0 3px 5px rgba(10,12,35,.5), inset 0 1px 0 rgba(255,255,255,.32), inset 0 -3px 6px rgba(0,0,0,.35);
+  }
+  body.gba .gbtn.a { right:0; top:6px; }
+  body.gba .gbtn.b { left:0; bottom:6px; }
+  body.gba .gbtn.pressed { transform:translateY(1px); filter:brightness(1.22); }
+  /* Start / Select — the classic angled pills, centered along the bottom */
+  #gbaSS { display:none; }
+  body.gba #gbaSS { display:flex; position:absolute; left:50%; bottom:calc(8px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); gap:20px; }
+  body.gba .ssb {
+    -webkit-appearance:none; appearance:none; cursor:pointer; border:none; transform:rotate(-18deg);
+    font:700 9px/1 system-ui,sans-serif; letter-spacing:.6px; color:rgba(255,255,255,.72);
+    background:linear-gradient(180deg,#3a3f52,#282d40); padding:6px 15px; border-radius:11px;
+    box-shadow:0 2px 3px rgba(10,12,35,.5), inset 0 1px 0 rgba(255,255,255,.12);
+  }
+  body.gba .ssb.pressed { filter:brightness(1.35); }
+  body.gba #joy { display:none !important; } /* the D-pad replaces the floating joystick */
+  body.gba #hint { display:none; } /* desktop drag/scroll instructions have no place here */
+  /* ---- overlays repositioned to live INSIDE the screen (top 2/3) ---- */
+  body.gba #ui { /* entity ride-alongs → horizontal item bar on the screen's bottom edge */
+    left:0; right:0; bottom:var(--sh); transform:none; max-width:none; z-index:21;
+    flex-direction:row; justify-content:center; gap:5px;
+    background:none; border:none; padding:5px 6px; backdrop-filter:none; -webkit-backdrop-filter:none;
+  }
+  body.gba #ui .grp { flex-direction:row; gap:5px; }
+  body.gba #presets button { width:40px; height:40px; font-size:19px; border-radius:12px; }
+  body.gba #ticker { bottom:calc(var(--sh) + 50px); }
+  body.gba #thoughtTicker { bottom:calc(var(--sh) + 82px); }
+  body.gba #agentFab { bottom:calc(var(--sh) + 98px); right:6px; width:76px; }
+  body.gba #camview { top:calc(var(--rh) / 2); } /* center the cam card on the screen, not the viewport */
+  body.gba #personaCard { bottom:calc(var(--sh) + 10px); } /* dock the resident card just above the shell */
+  body.gba.gbamute #ticker, body.gba.gbamute #thoughtTicker { display:none !important; } /* Select toggles the tickers */
 </style>
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -518,6 +611,25 @@
 <div id="flyhint">flying &middot; WASD/arrows move &middot; E/C up/down &middot; Space locks view &middot; Shift boost &middot; Esc exit</div>
 <button id="lockbtn" title="lock view direction">&#128275;</button>
 <div id="joy"><div id="joyK"></div></div>
+<!-- §26e GBA mobile shell — portrait-phone console face (inert + hidden unless body.gba) -->
+<div id="gba" aria-hidden="true">
+  <img id="gbaBrand" src="nycsim-logo.png" alt="NYC Simulator">
+  <div id="gbaDpad">
+    <button class="dp up"    data-dir="u" aria-label="fly forward"></button>
+    <button class="dp left"  data-dir="l" aria-label="fly left"></button>
+    <span   class="dp-hub"></span>
+    <button class="dp right" data-dir="r" aria-label="fly right"></button>
+    <button class="dp down"  data-dir="d" aria-label="fly back"></button>
+  </div>
+  <div id="gbaAB">
+    <button class="gbtn b" data-btn="b" aria-label="B — back out">B</button>
+    <button class="gbtn a" data-btn="a" aria-label="A — City Concierge">A</button>
+  </div>
+  <div id="gbaSS">
+    <button class="ssb" data-btn="select" aria-label="Select — toggle tickers">SELECT</button>
+    <button class="ssb" data-btn="start" aria-label="Start — auto-tour">START</button>
+  </div>
+</div>
 <div id="camview"><div class="ring"><img alt="live traffic camera"><div class="live"><i></i>LIVE</div><button class="x" title="close">✕</button></div><div class="name"></div></div>
 <div id="personaCard"><button class="x" title="close">✕</button><div class="phead"></div><div class="pbody"></div><div class="pfoot"></div><canvas id="pcAv"></canvas></div>
 <div id="dbg"></div>
@@ -1184,22 +1296,29 @@ function loadBakedMesh(url, tier) {
 const DCP_MAT = patchCityMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), 0);
 const DCP_CHUNKS = []; // {url, cx, cz, r, state:'idle'|'loading'|'loaded', mesh}
 function registerDcpChunk(url, cx, cz, r) { DCP_CHUNKS.push({ url, cx, cz, r, state: 'idle', mesh: null }); }
-let DCP_CAP = 16, DCP_LOAD = 7000, DCP_UNLOAD = 9000, _dcpTierSet = false;
+let DCP_CAP = 16, DCP_KEEP = 4, DCP_LOAD = 7000, DCP_UNLOAD = 9000, _dcpTierSet = false;
 function streamDcpChunks() {
   if (!_dcpTierSet) { // TIER is declared later in module scope — read it lazily at first run
     DCP_CAP = TIER === 'low' ? 3 : TIER === 'medium' ? 6 : 16;
-    // high (desktop): wide radius so a borough stays whole when zoomed out (RAM is fine);
-    // startup is still protected — the hero view sits ~29 km from eastern Queens. mobile
-    // keeps a tight radius + hard cap so resident geometry can't blow the memory budget.
+    // Resident chunks are bounded by RANK, not just distance: the nearest DCP_CAP load, and
+    // anything past the nearest (DCP_CAP + DCP_KEEP) is freed. Without this the old
+    // distance-only rule let loaded chunks pile up (all of NYC sits inside DCP_UNLOAD), so
+    // heap grew unbounded as more neighborhoods were added. The +DCP_KEEP band is hysteresis
+    // so a chunk hovering at the cap boundary doesn't load/dispose-thrash. Mobile also keeps a
+    // tight radius so decode spikes stay small.
     DCP_LOAD = TIER === 'low' ? 3200 : TIER === 'medium' ? 4800 : 13000;
     DCP_UNLOAD = DCP_LOAD + 2500; _dcpTierSet = true;
   }
   const cx = camera.position.x, cz = camera.position.z;
   const scored = DCP_CHUNKS.map(c => ({ c, d: Math.hypot(cx - c.cx, cz - c.cz) - c.r }));
   scored.sort((a, b) => a.d - b.d);
-  const want = new Set();
-  for (const s of scored) { if (s.d < DCP_LOAD && want.size < DCP_CAP) want.add(s.c); }
-  for (const { c, d } of scored) {
+  const want = new Set();   // nearest CAP within load radius → these load
+  const keep = new Set();   // nearest CAP+KEEP within unload radius → a loaded chunk outside this is freed
+  for (const s of scored) {
+    if (s.d < DCP_LOAD && want.size < DCP_CAP) want.add(s.c);
+    if (s.d < DCP_UNLOAD && keep.size < DCP_CAP + DCP_KEEP) keep.add(s.c);
+  }
+  for (const { c } of scored) {
     if (want.has(c)) {
       if (c.state === 'idle') {
         c.state = 'loading';
@@ -1209,10 +1328,9 @@ function streamDcpChunks() {
           c.mesh.matrixAutoUpdate = false; scene.add(c.mesh); c.state = 'loaded';
         }).catch(() => { c.state = 'idle'; });
       }
-    } else if (c.state === 'loaded' && d > DCP_UNLOAD) {
-      scene.remove(c.mesh); c.mesh.geometry.dispose(); c.mesh = null; c.state = 'idle';
-    } else if (c.state === 'loading' && d > DCP_UNLOAD) {
-      c.state = 'idle';                                   // cancel: drop the in-flight result on arrival
+    } else if (!keep.has(c)) {                            // fell outside the retain band (by rank or distance)
+      if (c.state === 'loaded') { scene.remove(c.mesh); c.mesh.geometry.dispose(); c.mesh = null; c.state = 'idle'; }
+      else if (c.state === 'loading') c.state = 'idle';   // cancel: drop the in-flight result on arrival
     }
   }
 }
@@ -1677,9 +1795,28 @@ const TIER = (() => {
   if (coarse || (navigator.deviceMemory || 8) <= 4) return 'medium'; // tablets / low-RAM
   return 'high';
 })();
+// §26e GBA mobile shell: on portrait phones the site becomes a Game Boy Advance —
+// the WebGL canvas renders into the TOP 2/3, the bottom 1/3 is a console shell (§26e
+// wires the controls). RENDER_H ("render height") is the canvas height used EVERYWHERE
+// (setSize, camera aspect, every NDC→screen chip projection); it equals innerHeight
+// except in gba mode. The class is set here so the FIRST render is already framed
+// right, and --sh (shell height in px) is published for the CSS shell/overlay layout
+// so CSS and canvas agree exactly regardless of vh/dvh quirks.
+const GBA_MQ = matchMedia('(max-width: 700px) and (orientation: portrait)');
+const gbaActive = () => GBA_MQ.matches && matchMedia('(pointer: coarse)').matches;
+let RENDER_H = innerHeight;
+function syncRenderH() {
+  const gba = document.body.classList.contains('gba');
+  RENDER_H = gba ? Math.round(innerHeight * 2 / 3) : innerHeight;
+  document.body.style.setProperty('--rh', RENDER_H + 'px');
+  document.body.style.setProperty('--sh', (innerHeight - RENDER_H) + 'px'); // shell height
+}
+if (gbaActive()) document.body.classList.add('gba');
+syncRenderH();
+
 const renderer = new THREE.WebGLRenderer({ antialias: TIER !== 'low', stencil: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, TIER === 'low' ? 1.25 : 2));
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(innerWidth, RENDER_H);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.12;
 renderer.shadowMap.enabled = true;
@@ -1689,7 +1826,7 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0xe3c096, 4.0e-5);
 
-const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 2, 90000);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / RENDER_H, 2, 90000);
 camera.position.set(-9200, 4700, -3900); // classic hero: from the southwest (the mirror below makes it read map-correct)
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -5223,12 +5360,80 @@ const fly = (() => {
 })();
 window.__fly = fly; // dev/testing hook
 window.__controls = controls; // dev/testing hook (control-feel diagnostics)
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
+function resizeRenderer() {
+  syncRenderH(); // gba mode: recompute the 2/3 canvas height + publish --rh/--sh
+  camera.aspect = innerWidth / RENDER_H;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
+  renderer.setSize(innerWidth, RENDER_H);
+}
+addEventListener('resize', resizeRenderer);
 applyQuality(TIER); // auto-selected device tier (PERF.md A); hash q= still overrides
+
+/* ============================================================
+   26e. GBA MOBILE SHELL — mode gating + control wiring
+   The CSS + markup (search "§26e") turn portrait phones into a Game Boy
+   Advance: canvas in the top 2/3 (RENDER_H), console shell in the bottom
+   1/3. Here we (1) toggle body.gba as the phone rotates across the
+   breakpoint, and (2) wire the shell controls. Wiring always attaches
+   (testable on desktop by adding body.gba); the elements are hidden off
+   gba. The D-pad writes the SAME fly.st.joy state the joystick does — the
+   mirror-correct movement math stays in §26c, unforked.
+   ============================================================ */
+{
+  // ---- mode gating: rotate/resize across the breakpoint flips the class + re-frames ----
+  function applyGbaMode() {
+    document.body.classList.toggle('gba', gbaActive());
+    resizeRenderer(); // recompute RENDER_H + --sh, resize the canvas to match
+  }
+  GBA_MQ.addEventListener('change', applyGbaMode);
+
+  // ---- D-pad: one touch zone (keys are visual), computes an 8-way vector like the
+  //      joystick and writes fly.st.joy directly (same sign convention as §26c) ----
+  const dpad = document.getElementById('gbaDpad');
+  const dpK = { u: dpad.querySelector('.up'), d: dpad.querySelector('.down'), l: dpad.querySelector('.left'), r: dpad.querySelector('.right') };
+  let dpId = null;
+  function dpTrack(e) {
+    const r = dpad.getBoundingClientRect();
+    let dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+    let dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+    const m = Math.hypot(dx, dy);
+    if (m < 0.3) { dx = dy = 0; }             // center dead zone (the hub)
+    else if (m > 1) { dx /= m; dy /= m; }     // clamp to the unit circle
+    fly.st.joy.x = dx; fly.st.joy.y = dy;     // f -= joy.y, r += joy.x (mirror handled in §26c)
+    dpK.u.classList.toggle('pressed', dy < -0.35);
+    dpK.d.classList.toggle('pressed', dy > 0.35);
+    dpK.l.classList.toggle('pressed', dx < -0.35);
+    dpK.r.classList.toggle('pressed', dx > 0.35);
+  }
+  function dpEnd() { fly.st.joy.x = fly.st.joy.y = 0; for (const k in dpK) dpK[k].classList.remove('pressed'); }
+  dpad.addEventListener('pointerdown', (e) => { dpId = e.pointerId; try { dpad.setPointerCapture(dpId); } catch { } navigator.vibrate?.(8); dpTrack(e); e.preventDefault(); });
+  dpad.addEventListener('pointermove', (e) => { if (e.pointerId === dpId) dpTrack(e); });
+  for (const t of ['pointerup', 'pointercancel']) dpad.addEventListener(t, (e) => { if (e.pointerId === dpId) { dpId = null; dpEnd(); } });
+
+  // ---- A / B / Start / Select: discrete actions, all delegating to existing handlers ----
+  function backOut() { // B: close whatever is open, most-modal first; else snap to now
+    const cam = document.getElementById('camview');
+    if (cam && getComputedStyle(cam).display !== 'none') { cam.querySelector('.x').click(); return; }
+    const card = document.getElementById('personaCard');
+    if (card && getComputedStyle(card).display !== 'none') { card.querySelector('.x').click(); return; }
+    if (document.body.classList.contains('agent')) { document.body.classList.remove('agent'); return; }
+    if (document.body.classList.contains('focusmode')) { dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); return; }
+    document.getElementById('timeReset').click(); // nothing open → back to LIVE
+  }
+  const BTN = {
+    a: () => { if (!document.body.classList.contains('agent')) document.getElementById('agentFab').click(); }, // open concierge
+    b: backOut,
+    start: () => document.getElementById('photo').click(),          // restart the Manhattan auto-tour
+    select: () => document.body.classList.toggle('gbamute')          // hide/show the ticker strips
+  };
+  for (const btn of document.querySelectorAll('#gbaAB .gbtn, #gbaSS .ssb')) {
+    const act = BTN[btn.dataset.btn];
+    btn.addEventListener('pointerdown', () => { btn.classList.add('pressed'); navigator.vibrate?.(8); });
+    for (const t of ['pointerup', 'pointercancel', 'pointerleave']) btn.addEventListener(t, () => btn.classList.remove('pressed'));
+    btn.addEventListener('click', (e) => { e.preventDefault(); act && act(); });
+  }
+  window.__gba = { applyGbaMode, backOut, active: gbaActive }; // dev/testing hook
+}
 
 /* ============================================================
    26b. LIVE NYC — real sun position + real weather
@@ -5376,7 +5581,7 @@ const precipOverlay = (() => {
   return {
     setWeather(inten, mode, slant) { intensity = clamp(inten, 0, 1); uni.uMode.value = mode; uni.uSlant.value = slant; },
     tick(camY) {
-      uni.uAspect.value = innerWidth / innerHeight;
+      uni.uAspect.value = innerWidth / RENDER_H;
       uni.uSpeed.value = uni.uMode.value < 0.5 ? 1 : 1;
       // fade in with altitude so it complements (not doubles) the 3D streaks up close
       uni.uOpacity.value = intensity * clamp(0.3 + camY / 1600, 0.3, 0.85);
@@ -5441,7 +5646,7 @@ const focusui = (() => {
     _v.set(p[0], p[1], p[2]).project(camera);
     if (_v.z > 1) { el.style.opacity = '0'; return; }
     el.style.opacity = '1';
-    const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * innerHeight; // x mirrored with the canvas
+    const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * RENDER_H; // x mirrored with the canvas
     el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
   }
   return { enter, exit, tick };
@@ -6307,7 +6512,7 @@ const flights = (() => {
         continue;
       }
       if (!L.on) { L.el.style.display = 'block'; L.on = true; }
-      const sx = (0.5 - _fv.x * 0.5) * innerWidth, sy = (-_fv.y * 0.5 + 0.5) * innerHeight; // x mirrored with the canvas
+      const sx = (0.5 - _fv.x * 0.5) * innerWidth, sy = (-_fv.y * 0.5 + 0.5) * RENDER_H; // x mirrored with the canvas
       L.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
     }
   }
@@ -6834,7 +7039,7 @@ const subway = (() => {
         continue;
       }
       if (!ch.on) { ch.el.style.display = 'block'; ch.on = true; }
-      const sx = (0.5 - _swV.x * 0.5) * innerWidth, sy = (-_swV.y * 0.5 + 0.5) * innerHeight; // x mirrored with the canvas
+      const sx = (0.5 - _swV.x * 0.5) * innerWidth, sy = (-_swV.y * 0.5 + 0.5) * RENDER_H; // x mirrored with the canvas
       ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
     }
   }
@@ -7072,7 +7277,7 @@ const ferries = (() => {
         continue;
       }
       if (!ch.on) { ch.el.style.display = 'block'; ch.on = true; }
-      const sx = (0.5 - _fyV.x * 0.5) * innerWidth, sy = (-_fyV.y * 0.5 + 0.5) * innerHeight; // x mirrored with the canvas
+      const sx = (0.5 - _fyV.x * 0.5) * innerWidth, sy = (-_fyV.y * 0.5 + 0.5) * RENDER_H; // x mirrored with the canvas
       ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
     }
   }
@@ -7212,7 +7417,7 @@ const cams = (() => {
       _cv.set(cm.x - camera.position.x, 12 - camera.position.y, cm.z - camera.position.z);
       if (_cv.dot(_cd) < 0) continue; // behind the camera
       _cv.set(cm.x, 12, cm.z).project(camera);
-      const sx = (_cv.x * 0.5 + 0.5) * innerWidth, sy = (-_cv.y * 0.5 + 0.5) * innerHeight;
+      const sx = (_cv.x * 0.5 + 0.5) * innerWidth, sy = (-_cv.y * 0.5 + 0.5) * RENDER_H;
       const d = (sx - e.clientX) * (sx - e.clientX) + (sy - e.clientY) * (sy - e.clientY);
       if (d < bd) { bd = d; best = cm; }
     }
@@ -7420,7 +7625,7 @@ const buses = (() => {
     for (const ch of bChips) { // glue chips to their buses every frame
       if (!ch.v) continue;
       _bV.set(ch.v.pos.x, 20, ch.v.pos.z).project(camera);
-      const sx = (0.5 - _bV.x * 0.5) * innerWidth, sy = (-_bV.y * 0.5 + 0.5) * innerHeight; // x mirrored with the canvas
+      const sx = (0.5 - _bV.x * 0.5) * innerWidth, sy = (-_bV.y * 0.5 + 0.5) * RENDER_H; // x mirrored with the canvas
       ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
     }
   }
@@ -7711,7 +7916,7 @@ const citibike = (() => {
     for (const ch of chips) {
       if (!ch.st) continue;
       _v.set(ch.st.x, 14, ch.st.z).project(camera);
-      const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * innerHeight;
+      const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * RENDER_H;
       ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
     }
   }
@@ -8051,7 +8256,7 @@ const birds = (() => {
     for (const ch of bfChips) {
       if (!ch.b) continue;
       _bcV.set(ch.b.x, ch.b.y + 16, ch.b.z).project(camera);
-      const sx = (0.5 - _bcV.x * 0.5) * innerWidth, sy = (-_bcV.y * 0.5 + 0.5) * innerHeight; // x mirrored with the canvas
+      const sx = (0.5 - _bcV.x * 0.5) * innerWidth, sy = (-_bcV.y * 0.5 + 0.5) * RENDER_H; // x mirrored with the canvas
       ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
     }
   }
@@ -8188,7 +8393,7 @@ const linknyc = (() => {
       _kv.set(placed[i][0] - camera.position.x, placed[i][3] + BALL_H - camera.position.y, placed[i][1] - camera.position.z);
       if (_kv.dot(_kd) < 0) continue; // behind the camera
       _kv.set(placed[i][0], placed[i][3] + BALL_H, placed[i][1]).project(camera);
-      const sx = (_kv.x * 0.5 + 0.5) * innerWidth, sy = (-_kv.y * 0.5 + 0.5) * innerHeight;
+      const sx = (_kv.x * 0.5 + 0.5) * innerWidth, sy = (-_kv.y * 0.5 + 0.5) * RENDER_H;
       const d = (sx - e.clientX) * (sx - e.clientX) + (sy - e.clientY) * (sy - e.clientY);
       if (d < bd) { bd = d; best = i; }
     }
@@ -8580,7 +8785,7 @@ const personas = (() => {
       _pv.set(dx, 4.5 - camera.position.y, dz);
       if (_pv.dot(_pd) < 0) continue;
       _pv.set(px, 4.5, pz).project(camera);
-      const sx = (_pv.x * 0.5 + 0.5) * innerWidth, sy = (-_pv.y * 0.5 + 0.5) * innerHeight;
+      const sx = (_pv.x * 0.5 + 0.5) * innerWidth, sy = (-_pv.y * 0.5 + 0.5) * RENDER_H;
       const d = (sx - e.clientX) * (sx - e.clientX) + (sy - e.clientY) * (sy - e.clientY);
       if (d < bd) { bd = d; best = pp; }
     }
@@ -8728,8 +8933,8 @@ const thoughts = (() => {
       const [px, pz] = personas.posAt(pp);
       _v.set(px, 6, pz).project(camera);
       if (_v.z > 1) continue;
-      const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * innerHeight;
-      if (sx < 70 || sx > innerWidth - 70 || sy < 140 || sy > innerHeight - 80) continue;
+      const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * RENDER_H;
+      if (sx < 70 || sx > innerWidth - 70 || sy < 140 || sy > RENDER_H - 80) continue;
       cand.push({ i, pp, sx, sy });
     }
     for (let k = cand.length - 1; k > 0; k--) { const j = (Math.random() * (k + 1)) | 0; [cand[k], cand[j]] = [cand[j], cand[k]]; }
@@ -8761,7 +8966,7 @@ const thoughts = (() => {
       const scale = Math.min(Math.max(dist / 900, 1), 4);        // match the walkers' distance-grow
       _v.set(px, 8.6 * scale, pz).project(camera);
       if (_v.z > 1 || dist > FADE1) { b.el.style.opacity = '0'; continue; }
-      const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * innerHeight; // x mirrored with the canvas
+      const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * RENDER_H; // x mirrored with the canvas
       b.el.style.opacity = dist < FADE0 ? '1' : String(1 - (dist - FADE0) / (FADE1 - FADE0));
       b.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
       b.el.classList.toggle('near', near);
@@ -8774,7 +8979,7 @@ const thoughts = (() => {
         const scale = Math.min(Math.max(Math.sqrt(dx * dx + dz * dz) / 900, 1), 4);
         _v.set(p[0], 9.4 * scale, p[2]).project(camera);
         if (_v.z <= 1) {
-          const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * innerHeight;
+          const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * RENDER_H;
           plum.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-100%)';
           plum.style.display = 'block';
         } else plum.style.display = 'none';
@@ -8803,7 +9008,7 @@ const chipLimiter = (() => {
   function tick() {
     if (!MOBILE) return;
     const all = document.getElementsByClassName('fybl');
-    const cx = innerWidth / 2, cy = innerHeight / 2;
+    const cx = innerWidth / 2, cy = RENDER_H / 2;
     const shown = [];
     for (let i = 0; i < all.length; i++) {
       const c = all[i];
@@ -9025,7 +9230,7 @@ const nyc311 = (() => {
     for (const ch of chips) { // glue chips to their anchors every frame
       if (!ch.o) continue;
       _v.set(ch.o.x, ch.o.y, ch.o.z).project(camera);
-      const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * innerHeight; // x mirrored with the canvas
+      const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * RENDER_H; // x mirrored with the canvas
       ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
     }
   }
@@ -9482,7 +9687,7 @@ const rtraffic = (() => {
     for (const ch of chips) { // glue chips to their anchors every frame
       if (!ch.o) continue;
       _v.set(ch.o.x, ch.o.y, ch.o.z).project(camera);
-      const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * innerHeight; // x mirrored with the canvas
+      const sx = (0.5 - _v.x * 0.5) * innerWidth, sy = (-_v.y * 0.5 + 0.5) * RENDER_H; // x mirrored with the canvas
       ch.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-130%)';
     }
   }
@@ -9751,7 +9956,7 @@ const concierge = (() => {
         if (!L.o) continue;
         _lv.set(L.o.x, 44, L.o.z).project(camera);
         if (_lv.z > 1 || _lv.x < -1.05 || _lv.x > 1.05 || _lv.y < -1.05 || _lv.y > 1.05) { L.el.style.transform = 'translate(-9999px,0)'; continue; }
-        const sx = (0.5 - _lv.x * 0.5) * innerWidth, sy = (-_lv.y * 0.5 + 0.5) * innerHeight;
+        const sx = (0.5 - _lv.x * 0.5) * innerWidth, sy = (-_lv.y * 0.5 + 0.5) * RENDER_H;
         L.el.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(-50%,-135%)';
       }
     }

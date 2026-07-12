@@ -18,6 +18,19 @@ every push (every push deploys prod).
 | C | Startup memory: C1 ✅ · C2a typed sinks ✅ (peak −343 MB) · C2b compress+dispose ✅ (settle 517→86 MB, GPU −48%) | high | ✅ **MOBILE CONFIRMED FIXED** (2026-07-08, user-verified on Safari + Chrome mobile after C2b; C2c not needed) |
 | D | Consolidated `/api/live` snapshot ✅ + Web Worker bridge ✅ (9 pollers → 1 off-thread; `#nolive` kill switch) | high | ✅ done (payload trims optional) |
 | E | Distance-tiered simulation updates (traffic: −38% CPU at street level, ÷2 cap aloft) | medium | ✅ done (traffic; boats/riders not worth it — ~5% of the cost) |
+| F | DCP chunk streaming: rank-bounded eviction (loaded ≤ `CAP + KEEP`, not distance-only) | medium | ✅ done (2026-07-12; keeps resident geometry FLAT as neighborhoods are added) |
+
+**F — DCP chunk eviction (2026-07-12).** As more baked-neighborhood chunks were registered (now
+50: 26 BK + 20 QN + 3 UES + resident), desktop resident geometry grew unbounded: the streamer only
+freed a loaded chunk once it was past `DCP_UNLOAD` (~15.5 km), and all of NYC fits inside that, so
+loaded chunks piled up toward all 50 (~575 MB projected heap). Fix: evict by **rank** — keep the
+nearest `DCP_CAP` loaded and free anything past the nearest `DCP_CAP + DCP_KEEP` (`+KEEP` = hysteresis
+band so a chunk at the boundary doesn't load/dispose-thrash). Measured (desktop `high`, after flying
+across the city): loaded settled at **18–20** (was 27+ and climbing); moving Manhattan→East Brooklyn
+**freed the far Manhattan chunks** (ues 3→0) while the near ones loaded; heap 350→328 MB, DCP geometry
+4.41M→3.06M verts, fps 120, no visible gaps at navigation zoom. Mobile (`CAP=3`) was already bounded by
+its tight radius; unchanged. Tradeoff: a very wide aerial now shows the nearest ~20 neighborhoods rather
+than all of them — the fix for that is per-chunk distance LOD (a separate, larger workstream).
 
 ## Baseline (measured 2026-07-07, commit `7d434d4`, desktop Chrome via preview, local server)
 
