@@ -6,6 +6,33 @@ the rules on adding entries.
 
 ---
 
+## 🏙️ Upper East Side + Roosevelt Island: real massing & a lore-accurate East River
+
+**Shipped:** July 11, 2026
+
+**TL;DR:** The Upper East Side (Lenox Hill, Yorkville, Carnegie Hill) now renders from
+the city's real building massing instead of procedural boxes, and Roosevelt Island has
+been moved to its true position mid-channel — which opens up an accurate East River: from
+Manhattan's shore, across the water, onto Roosevelt Island, across the East Channel, to
+the Queens waterfront.
+
+**What you'll see:** the dense UES street grid east of Central Park with real building
+footprints and heights (Lenox Hill, Yorkville, Carnegie Hill); Roosevelt Island sitting
+in the middle of the East River with its own buildings (Cornell Tech, the Octagon,
+Four Freedoms Park at the south tip, the lighthouse at the north); and — the point of the
+exercise — the water reads correctly now: **Manhattan → East River (water) → Roosevelt
+Island (land) → East Channel (water) → Queens (land)**, with nothing stranded on water.
+
+**How it works:** geometry from the NYC DCP **MN08** tile
+([NYC 3D model](https://www.nyc.gov/site/planning/data-maps/open-data/dwn-nyc-3d-model-download.page)),
+baked to 4 proximity-streamed chunks (~13.7 MB, ~313k tris) through the exact-geoRaw
+transform. Roosevelt Island's outline was rebuilt from its real building coverage and the
+island shifted east to its true SP position (scene x 1420–1791), which automatically opens
+both channels against the frozen coastline — no calibration was touched. Procedural boxes
+under the UES and the island are suppressed by an `inMN08` ring.
+
+---
+
 ## ✈️ Airports + parks: real JFK, LaGuardia, Flushing Meadows & Forest Park
 
 **Shipped:** July 11, 2026

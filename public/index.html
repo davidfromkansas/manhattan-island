@@ -1081,6 +1081,20 @@ function inPad(x, z) {
 // Financial District core: real DCP massing (fidi.json) replaces the box fabric inside
 // this ring. Two carve-outs keep the hand-built WTC ensemble and the real WTC block's
 // footprint boxes; fidi.json was baked with the same ring + carve-outs — keep in sync.
+// Upper East Side (Carnegie Hill / Lenox Hill / Yorkville) + Roosevelt Island: real DCP
+// massing (ues-*.json / roosevelt-island.json) replaces the box fabric in this zone.
+const RI_RING = [[1542.9, 7524.7], [1554.4, 7644.7], [1587.4, 7764.7], [1591.6, 7884.7], [1609.5, 8004.7], [1630.9, 8124.7], [1631.3, 8244.7], [1599.1, 8364.7], [1642.5, 8484.7], [1627.6, 8604.7], [1721.1, 8724.7], [1726.8, 8844.7], [1730.4, 8964.7], [1738.8, 9084.7], [1746.8, 9204.7], [1750.9, 9324.7], [1754.9, 9444.7], [1744.9, 9564.7], [1703.0, 9684.7], [1769.0, 9804.7], [1784.9, 9924.7], [1791.6, 10044.7], [1789.7, 10164.7], [1610.7, 10164.7], [1588.3, 10044.7], [1602.5, 9924.7], [1548.9, 9804.7], [1560.6, 9684.7], [1612.4, 9564.7], [1533.4, 9444.7], [1524.7, 9324.7], [1519.4, 9204.7], [1482.4, 9084.7], [1482.0, 8964.7], [1474.8, 8844.7], [1474.8, 8724.7], [1506.2, 8604.7], [1440.8, 8484.7], [1440.8, 8364.7], [1448.6, 8244.7], [1449.4, 8124.7], [1436.4, 8004.7], [1420.4, 7884.7], [1420.4, 7764.7], [1429.7, 7644.7], [1467.8, 7524.7]];
+function inMN08(x, z) {
+  if (x > 60 && x < 1420 && z > 8100 && z < 11200) return true;   // UES mainland
+  if (x > 1400 && x < 1820 && z > 7500 && z < 10200) {            // Roosevelt Island
+    let ins = false;
+    for (let i = 0, k = RI_RING.length - 1; i < RI_RING.length; k = i++) {
+      if ((RI_RING[i][1] > z) !== (RI_RING[k][1] > z) && x < (RI_RING[k][0] - RI_RING[i][0]) * (z - RI_RING[i][1]) / (RI_RING[k][1] - RI_RING[i][1]) + RI_RING[i][0]) ins = !ins;
+    }
+    if (ins) return true;
+  }
+  return false;
+}
 const FIDI_RING = [[-89, 100], [-150, 734], [-173, 1025], [-235, 1329], [-129, 1481], [105, 1700], [595, 1810], [603, 959], [343, 247]];
 function inFidi(x, z) {
   if (x < -560 || x > 610 || z < 90 || z > 1820) return false;
@@ -1615,6 +1629,7 @@ function generateCity() {
     const x = BLDG.x[i], z = BLDG.z[i];
     if (!onLand(x, z)) continue;
     if (inFidi(x, z)) continue; // FiDi core renders real DCP massing (fidi.json) instead
+    if (inMN08(x, z)) continue; // Upper East Side + Roosevelt Island render real DCP massing
     const R = rng(iHash(BLDG.bin[i] | 0, 3));
     makeBuilding(x, z, BLDG.w[i], BLDG.d[i], BLDG.r[i] / 1000, recipeAt(x, z), R,
       { h: Math.max(4, BLDG.h[i]), real: true });
@@ -2061,16 +2076,14 @@ const qnShoreX = makeShoreX(QB.QN.shx), bxShoreX = makeShoreX(QB.BX.shx);
 // landOK-governed footprint box loses its ground. It converges with the stylized shore
 // at Astoria (z~10500) where that one was already accurate; QB.QN.bnd/shx stay
 // untouched. Roosevelt Island is exempt from the carve (its buildings ride landOK too).
-// Two shelf dips (z 8120-8360 and 9740-10160) keep ground under the Roosevelt Island
-// content that spills EAST of the channel-fitted islet ring (Cornell Tech landmark,
-// Coler-area real footprints, the island lighthouse): the islet mesh is refit ~300 m
-// west of its geoRaw position, but its buildings are placed at real coordinates and
-// sat on the old phantom plate. Un-shifting the island retires these dips.
+// Western Queens (Long Island City) waterfront — real DCP bank. (The RI-spill shelf
+// dips were retired when Roosevelt Island moved to its true position, which now
+// carries its own islet ground under its buildings.)
 const QW_SHX = [[6450, 1760], [6600, 1739], [6750, 1760], [6900, 1728], [7050, 1715],
   [7200, 1717], [7350, 1741], [7500, 1781], [7650, 1784], [7800, 1797], [7950, 1814],
-  [8080, 1830], [8120, 1528], [8360, 1528], [8420, 1845], [8550, 1852], [8700, 1856],
+  [8100, 1832], [8250, 1836], [8400, 1845], [8550, 1852], [8700, 1856],
   [8850, 1860], [9000, 1870], [9150, 1874], [9300, 1876], [9450, 1880], [9600, 1896],
-  [9700, 1908], [9740, 1610], [10160, 1610], [10220, 2090], [10350, 1857], [10500, 1778]];
+  [9750, 1915], [9900, 1955], [10050, 2054], [10200, 2124], [10350, 1857], [10500, 1778]];
 function qwShoreX(z) {
   if (z < QW_SHX[0][0] || z > QW_SHX[QW_SHX.length - 1][0]) return null;
   for (let i = 0; i < QW_SHX.length - 1; i++) {
@@ -2102,25 +2115,13 @@ window.__audit = { coastAt, landOK, bkContains, qnContains, bxContains, bayConta
   bkShoreX, qnShoreX, bxShoreX, qwShoreX, riIslContains, matchStreet, nearestNode, BK, QB,
   G: () => G_COUNTS }; // spatial-audit handle (counts captured at load — block data itself is released post-build)
 
-// Roosevelt Island must fit the PINCHED stylized channel: the frozen calibration
-// makes the baked ring wider than the water between Manhattan's stylized east
-// coast and the real Queens shore. Squeeze its x-range into the channel per
-// vertex and carry its landmarks (Cornell, tram, lighthouse...) along.
-{
-  let x0 = 1e9, x1 = -1e9;
-  for (const p of QB.ISL.ri) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); }
-  const fit = (x, z) => {
-    // island occupies the middle band of the REAL channel (slightly west of center,
-    // like reality) — mapping to the full gap bloated it after the real-coast fix
-    const xw = coastAt(z).e;
-    const qs = (qnShoreX(z) ?? bkShoreX(z) ?? (xw + 620)); // prefer the REAL chain-sampled shore
-    const W = Math.max(220, qs - xw);
-    return Math.round(xw + W * 0.26 + (x - x0) / (x1 - x0) * W * 0.40);
-  };
-  for (const p of QB.ISL.ri) p[0] = fit(p[0], p[1]);
-  for (const k of ['cornell', 'fourfreedoms', 'rilight', 'octagon', 'tram_r'])
-    QB.lm[k][0] = fit(QB.lm[k][0], QB.lm[k][1]);
-}
+// Roosevelt Island at its TRUE geoRaw position (un-shifted — the old channel-fit
+// squeezed it against Manhattan, leaving no East River). The real coords open the
+// main channel (Manhattan coast → island) and the East Channel (island → Queens);
+// its real DCP buildings ride the roosevelt-island.json chunk on this ring.
+QB.ISL.ri.length = 0; for (const pt of [[1542.9, 7524.7], [1554.4, 7644.7], [1587.4, 7764.7], [1591.6, 7884.7], [1609.5, 8004.7], [1630.9, 8124.7], [1631.3, 8244.7], [1599.1, 8364.7], [1642.5, 8484.7], [1627.6, 8604.7], [1721.1, 8724.7], [1726.8, 8844.7], [1730.4, 8964.7], [1738.8, 9084.7], [1746.8, 9204.7], [1750.9, 9324.7], [1754.9, 9444.7], [1744.9, 9564.7], [1703.0, 9684.7], [1769.0, 9804.7], [1784.9, 9924.7], [1791.6, 10044.7], [1789.7, 10164.7], [1610.7, 10164.7], [1588.3, 10044.7], [1602.5, 9924.7], [1548.9, 9804.7], [1560.6, 9684.7], [1612.4, 9564.7], [1533.4, 9444.7], [1524.7, 9324.7], [1519.4, 9204.7], [1482.4, 9084.7], [1482.0, 8964.7], [1474.8, 8844.7], [1474.8, 8724.7], [1506.2, 8604.7], [1440.8, 8484.7], [1440.8, 8364.7], [1448.6, 8244.7], [1449.4, 8124.7], [1436.4, 8004.7], [1420.4, 7884.7], [1420.4, 7764.7], [1429.7, 7644.7], [1467.8, 7524.7]]) QB.ISL.ri.push(pt); // mutate in place (riIslContains holds this ref)
+{ const RL = { cornell: [1649, 8123], fourfreedoms: [1602, 7338], rilight: [1546, 10005], octagon: [1823, 9569], tram_r: [1478, 8476] };
+  for (const k in RL) QB.lm[k] = RL[k]; }
 
 /* ============================================================
    13. Ground canvas (streets etched + painted long shadows)
@@ -3304,6 +3305,11 @@ const NECKLACE = []; // bridge/arch light positions (consumed by section 21's em
   registerDcpChunk('qn-collegept.json', 8460, 16065, 2318); // College Point / Malba
   registerDcpChunk('qn-whitestone.json', 11307, 16530, 2911);// Whitestone / Beechhurst / Clearview
   registerDcpChunk('qn-bayside.json', 11941, 13131, 992);   // Auburndale / Bay Terrace
+  // Upper East Side + Roosevelt Island (DCP tile MN08)
+  registerDcpChunk('ues-lenox.json', 695, 8801, 931);       // Lenox Hill
+  registerDcpChunk('ues-yorkville.json', 726, 9839, 808);   // Yorkville / mid-UES
+  registerDcpChunk('ues-carnegie.json', 716, 10651, 807);   // Carnegie Hill
+  registerDcpChunk('roosevelt-island.json', 1611, 8861, 1287); // Roosevelt Island (true position)
   // Parks + airports (DCP parks/airports tile): real terminals on the existing runways,
   // and the park monuments (NY State Pavilion, museums, Forest Park structures).
   registerDcpChunk('qn-jfk.json', 17587, 4825, 3261);       // JFK terminals / hangars / control tower / TWA
