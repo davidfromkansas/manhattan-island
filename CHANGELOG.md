@@ -89,39 +89,46 @@ feet — the bake now auto-detects units per tile. Chunks ship as binary `.bin` 
 **Shipped:** July 12, 2026
 
 **TL;DR:** Open the city on a phone held upright and the whole site becomes a Game Boy
-Advance: the live NYC simulation fills the top two-thirds as the "screen," and the
-bottom third is a working console — a D-pad to move, round buttons to rotate the view,
-and Start/Select pills to rise and descend.
+Advance: the console appears instantly with a pixel Sims-style boot screen while the city
+loads, then the live NYC simulation fills the top two-thirds as the "screen" — a D-pad to
+move, a joystick to look around, and `+` / `−` pills to rise and descend.
 
-**What you'll see:** on a portrait phone, the 3D city renders in the top 2/3, with the
-time/weather chip, 7-day timeline, news + resident-thought tickers, and the concierge
-overlaid on the screen as an in-game HUD. Below it is the console: a row of the
-seven ride-along shortcuts (✈️ 🚇 ⛴️ 🚌 🚲 📷 🐦) across the **top**, a **D-pad** on the
-left and a ring of four round **rotation buttons** on the right (Knicks-orange keys on a
-Knicks-blue console), two angled **`+` / `−` pills** in the classic Start/Select spot for altitude, and
-the **nycsim.com** banner along the **bottom**. The D-pad walks the camera flat over the
-city — up/down = forward/back, left/right = strafe — always on the horizontal plane no
-matter where you're looking. The four rotation buttons turn the view (left/right) and
-tilt it (up toward the skyline, down for a bird's-eye of the streets), and the `+` / `−`
-pills raise and lower your altitude. You can still drag anywhere on the screen to look around while
-steering. Buttons give a small haptic tap where the phone supports it. To keep the small
-screen readable, only the **two nearest** transit/incident labels show at once (the rest
-stay as unlabeled dots until you get close), while the unobtrusive **citizen thought
-bubbles are dialed up** so the crowd still feels alive. Rotate to landscape, or open it
-on a desktop or tablet, and the normal full-screen layout returns unchanged.
+**What you'll see:** the console paints the moment the page opens, with a **boot screen**
+in the game window — scanlines, the nycsim logo, a spinning Sims plumbob, rotating flavor
+lines (*"reticulating splines…"*) and a chunky segmented **progress bar tracking the real
+download and build** of the city. Then the 3D city takes over the top 2/3, with the
+time/weather chip, 7-day timeline, resident-thought ticker, and the concierge overlaid as
+an in-game HUD (the news ticker stays desktop-only). Below is the console: the seven
+ride-along shortcuts (✈️ 🚇 ⛴️ 🚌 🚲 📷 🐦) across the **top**, a **D-pad** on the left and
+a knurled **look joystick** on the right (Knicks-orange controls on a Knicks-blue
+console), two **`+` / `−` pills** in the classic Start/Select spot for altitude, and the
+**nycsim.com** banner along the **bottom**. The D-pad walks the camera flat over the city
+— up/down = forward/back, left/right = strafe — always on the horizontal plane no matter
+where you're looking. Push the joystick to turn the view (left/right) and tilt it (up
+toward the skyline, down for a bird's-eye), speed scaling with how far you push; the
+`+` / `−` pills raise and lower your altitude. You can still drag anywhere on the screen
+to look around while steering. Controls give a small haptic tap where the phone supports
+it. To keep the small screen readable, only the **two nearest** transit/incident labels
+show at once (the rest stay as unlabeled dots until you get close), while the unobtrusive
+**citizen thought bubbles are dialed up** so the crowd still feels alive. Rotate to
+landscape, or open it on a desktop or tablet, and the normal full-screen layout returns
+unchanged.
 
 **How it works:** the layout activates only for coarse-pointer devices at
-`max-width:700px` in portrait, toggled live as the phone rotates. The WebGL canvas is
-resized to exactly the top 2/3 of the viewport (a real rendering saving on phones), and
-a single render-height value flows through the camera aspect and every entity
-label/pick projection so chips stay glued to their entities and taps still select the
-right thing on the shorter canvas — the console's height is published to CSS so the
-shell and canvas always meet exactly. Both pads drive the existing fly-camera (movement
-and elevation nudge the camera directly; the dial nudges look-yaw/pitch), so the map's
-left-right mirror and drag-to-look keep behaving exactly as before, and the right pad
-reuses the desktop rotation dial's behavior (restyled to match the D-pad). No new data,
-no server changes — purely how
-the existing city is framed and driven on a phone.
+`max-width:700px` in portrait, toggled live as the phone rotates. A tiny inline script
+paints the console at HTML-parse time — long before the ES module, which waits on the
+three.js CDN and a ~27 MB city download — and the boot bar tracks real progress: the big
+geometry files stream through a byte-counting reader, and the build phase yields at each
+section boundary (streets → skyline → Brooklyn → boroughs → landmarks → traffic) so the
+bar repaints while the main thread works; the first rendered frame fades it out. The
+WebGL canvas is resized to exactly the top 2/3 of the viewport (a real rendering saving
+on phones), and a single render-height value flows through the camera aspect and every
+entity label/pick projection so chips stay glued to their entities and taps still select
+the right thing on the shorter canvas — the console's height is published to CSS so the
+shell and canvas always meet exactly. All controls drive the existing fly-camera
+(movement and elevation nudge the camera directly; the joystick nudges look-yaw/pitch),
+so the map's left-right mirror and drag-to-look keep behaving exactly as before. No new
+data, no server changes — purely how the existing city is framed and driven on a phone.
 
 ---
 

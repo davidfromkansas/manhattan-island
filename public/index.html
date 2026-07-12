@@ -547,18 +547,27 @@
   body.gba .dp.left::after  { transform:translate(-70%,-50%); border-top:6px solid transparent; border-bottom:6px solid transparent; border-right:8px solid #fff; }
   body.gba .dp.right::after { transform:translate(-30%,-50%); border-top:6px solid transparent; border-bottom:6px solid transparent; border-left:8px solid #fff; }
   body.gba .dp.pressed { background:linear-gradient(180deg,#ffc078,#f2913f); }
-  /* Rotation dial (right) — same functions as the desktop #rotDial (yaw L/R, pitch
-     over/under, center +/− elevation) but restyled in the D-pad's charcoal GBA
-     material so both pads read as one console (§26e). */
-  #gbaRot { display:none; }
-  body.gba #gbaRot {
+  /* Look joystick (right) — analog replacement for the four rotation buttons: push to
+     rotate the view (x = yaw, y = pitch), same fly.st math via §26e's rotStep. Knurled
+     Knicks-orange knob in a recessed well so it reads as a tactile thumbstick. */
+  #gbaStick { display:none; }
+  body.gba #gbaStick {
     display:block; position:absolute; right:7%; top:50%; transform:translateY(-50%);
-    width:120px; height:120px; touch-action:none; filter:drop-shadow(0 3px 5px rgba(10,12,35,.5));
+    width:112px; height:112px; border-radius:50%; touch-action:none; cursor:pointer;
+    background:radial-gradient(circle at 50% 42%, #16418a, #0e2f66 72%); /* recessed well */
+    box-shadow:inset 0 3px 8px rgba(6,16,42,.75), inset 0 -1px 0 rgba(255,255,255,.14), 0 2px 4px rgba(10,12,35,.4);
   }
-  body.gba #gbaRot svg { display:block; width:100%; height:100%; }
-  body.gba #gbaRot .db { fill:url(#gbaKeyG); stroke:#151a28; stroke-width:1.4; cursor:pointer; } /* charcoal keys, like the D-pad */
-  body.gba #gbaRot .db.pressed, body.gba #gbaRot .db:active { fill:url(#gbaKeyP); }              /* pressed = indigo, like .dp.pressed */
-  body.gba #gbaRot .ic { pointer-events:none; }
+  #gbaStickK { /* the knob: concentric knurl rings + a top highlight + grip dimples */
+    position:absolute; left:50%; top:50%; width:58px; height:58px; border-radius:50%;
+    transform:translate(-50%,-50%); pointer-events:none;
+    background:
+      radial-gradient(circle at 35% 28%, rgba(255,255,255,.5), rgba(255,255,255,0) 46%),
+      radial-gradient(circle at 50% 50%, rgba(120,45,0,.5) 0 4px, transparent 5px),
+      repeating-radial-gradient(circle at 50% 50%, #ee833a 0 3px, #d96a1a 3px 6px);
+    border:1.5px solid #b95f18;
+    box-shadow:0 4px 7px rgba(10,12,35,.55), inset 0 2px 3px rgba(255,255,255,.3), inset 0 -4px 7px rgba(120,45,0,.45);
+  }
+  body.gba #gbaStick.pressed #gbaStickK { filter:brightness(1.15); }
   /* Start / Select pills — repurposed as the +/− vertical-elevation buttons (§26e) */
   #gbaSS { display:none; }
   body.gba #gbaSS { display:flex; position:absolute; left:50%; top:70%; transform:translate(-50%,-50%); gap:8px; } /* in the gap between the pads — clears the up/down keys and the logo */
@@ -588,6 +597,40 @@
   body.gba #wxAlerts { display:none !important; } /* drop the weather-alert card on phones */
   body.gba #camview { top:calc(var(--rh) / 2); } /* center the cam card on the screen, not the viewport */
   body.gba #personaCard { bottom:calc(var(--sh) + 10px); } /* dock the resident card just above the shell */
+  /* §26e boot screen — fills the GBA "screen" instantly while the module loads:
+     pixel-arcade type, a spinning Sims plumbob, and a chunky segmented progress bar.
+     Painted by the inline script right after the console markup; removed on first frame. */
+  #gbaBoot { display:none; }
+  body.gba #gbaBoot {
+    display:flex; position:fixed; left:0; top:0; right:0; height:var(--rh); z-index:60;
+    flex-direction:column; align-items:center; justify-content:center; gap:18px;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0 2px, transparent 2px 4px), /* scanlines */
+      linear-gradient(180deg, #1a4d9e 0%, #123a7e 55%, #0c2a5c 100%);
+  }
+  #gbaBoot img { width:min(58%, 230px); image-rendering:pixelated; filter:drop-shadow(0 3px 0 rgba(6,16,42,.6)); }
+  #gbaBoot .pb i { /* Sims plumbob, same clip-path diamond as #plumbob */
+    display:block; width:20px; height:32px; background:#41c536;
+    clip-path:polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+    animation:plspin 1.5s linear infinite;
+    filter:drop-shadow(0 0 8px rgba(65,197,54,.8));
+  }
+  #gbaBoot .bar {
+    width:min(68%, 250px); height:20px; padding:3px; box-sizing:border-box;
+    background:#081d40; border:2px solid #35619f; border-radius:4px;
+    box-shadow:inset 0 2px 4px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.14);
+  }
+  #gbaBoot .fill {
+    height:100%; width:0%; background:#41c536; border-radius:2px;
+    /* chunky pixel segments: dark notches every 10px */
+    background-image:repeating-linear-gradient(90deg, transparent 0 8px, rgba(8,29,64,.85) 8px 10px);
+    transition:width .25s steps(4);
+  }
+  #gbaBoot .pct, #gbaBoot .lbl {
+    font:700 12px ui-monospace, Menlo, monospace; color:#cfe3ff; letter-spacing:2px;
+    text-transform:uppercase; text-shadow:0 2px 0 rgba(6,16,42,.7);
+  }
+  #gbaBoot .lbl { font-size:10px; color:#8fb4e8; letter-spacing:1.2px; min-height:14px; }
 </style>
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -624,47 +667,57 @@
     <button class="dp right" data-dir="r" aria-label="move right"></button>
     <button class="dp down"  data-dir="d" aria-label="move back"></button>
   </div>
-  <div id="gbaRot"><!-- rotation: 4 CIRCLE buttons (yaw L/R, tilt over/under) — §26e -->
-    <svg viewBox="0 0 120 120">
-      <defs>
-        <linearGradient id="gbaKeyG" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#f28a3e"/><stop offset="1" stop-color="#dd6e1e"/>
-        </linearGradient>
-        <linearGradient id="gbaKeyP" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#ffc078"/><stop offset="1" stop-color="#f2913f"/>
-        </linearGradient>
-      </defs>
-      <circle class="db" data-act="ro" cx="60" cy="26" r="17"><title>tilt up (bird's-eye)</title></circle>
-      <circle class="db" data-act="ru" cx="60" cy="94" r="17"><title>tilt down (street level)</title></circle>
-      <circle class="db" data-act="rr" cx="94" cy="60" r="17"><title>rotate left</title></circle>
-      <circle class="db" data-act="rl" cx="26" cy="60" r="17"><title>rotate right</title></circle>
-      <!-- half-arc "rotate" arrow (a semicircle tail into a cardinal head) — clearly a
-           TURN, not a move; rotated per circle so it points up/right/down/left -->
-      <g class="ic" stroke-linejoin="round">
-        <g transform="translate(60 26)">
-          <path fill="none" stroke="#eaf0ff" stroke-width="2.8" stroke-linecap="round" d="M5.6 4.6 A7 7 0 1 1 -2.2 -6.6"/>
-          <path fill="#eaf0ff" stroke="none" d="M-2.2 -9.8 L-6 -4 L1.6 -4 Z"/>
-        </g>
-        <g transform="translate(94 60) rotate(270)">
-          <path fill="none" stroke="#eaf0ff" stroke-width="2.8" stroke-linecap="round" d="M5.6 4.6 A7 7 0 1 1 -2.2 -6.6"/>
-          <path fill="#eaf0ff" stroke="none" d="M-2.2 -9.8 L-6 -4 L1.6 -4 Z"/>
-        </g>
-        <g transform="translate(60 94) rotate(180)">
-          <path fill="none" stroke="#eaf0ff" stroke-width="2.8" stroke-linecap="round" d="M5.6 4.6 A7 7 0 1 1 -2.2 -6.6"/>
-          <path fill="#eaf0ff" stroke="none" d="M-2.2 -9.8 L-6 -4 L1.6 -4 Z"/>
-        </g>
-        <g transform="translate(26 60) rotate(90)">
-          <path fill="none" stroke="#eaf0ff" stroke-width="2.8" stroke-linecap="round" d="M5.6 4.6 A7 7 0 1 1 -2.2 -6.6"/>
-          <path fill="#eaf0ff" stroke="none" d="M-2.2 -9.8 L-6 -4 L1.6 -4 Z"/>
-        </g>
-      </g>
-    </svg>
+  <div id="gbaStick" aria-label="look joystick — push to rotate the view"><!-- §26e analog look control -->
+    <div id="gbaStickK"></div>
   </div>
   <div id="gbaSS"><!-- elevation +/− as the classic angled Start/Select pills — §26e -->
     <button class="ssb" data-act="ed" aria-label="descend">−</button>
     <button class="ssb" data-act="eu" aria-label="ascend">+</button>
   </div>
 </div>
+<div id="gbaBoot"><!-- §26e boot screen (phones): shown by the inline script below, removed on first frame -->
+  <img src="nycsim-logo.png" alt="NYC Simulator">
+  <div class="pb"><i></i></div>
+  <div class="bar"><div class="fill"></div></div>
+  <div class="pct">0%</div>
+  <div class="lbl">reticulating splines…</div>
+</div>
+<script>
+/* §26e INSTANT CONSOLE — plain script, runs at parse time, long before the ES module
+   (which waits on the three.js CDN + a ~40 MB city download). Paints body.gba so the
+   CSS-only console + boot screen show immediately on phones. The module's own gate
+   recomputes the same state later (harmless overwrite); its milestones drive the bar
+   via window.__gbaBoot, and frame() calls done() once the scene actually renders. */
+(() => {
+  const portrait = matchMedia('(max-width: 700px) and (orientation: portrait)').matches;
+  const force = /\bgba\b/.test(location.search + location.hash);
+  if (!(portrait && (force || matchMedia('(pointer: coarse)').matches))) return;
+  document.body.classList.add('gba');
+  const rh = Math.round(innerHeight * 2 / 3);
+  document.body.style.setProperty('--rh', rh + 'px');
+  document.body.style.setProperty('--sh', (innerHeight - rh) + 'px');
+  const boot = document.getElementById('gbaBoot');
+  const fill = boot.querySelector('.fill'), pct = boot.querySelector('.pct'), lbl = boot.querySelector('.lbl');
+  const LINES = ['reticulating splines…', 'waking 12,703 New Yorkers…', 'untangling subway lines…',
+                 'brewing bodega coffee…', 'parallel parking 8,000 cars…', 'arguing about bagels…'];
+  let li = 0;
+  const lt = setInterval(() => { lbl.textContent = LINES[++li % LINES.length]; }, 1800);
+  let p = 0.04, cap = 0.15; // creep toward the current milestone cap so the bar always moves
+  const draw = () => { const s = Math.min(p, 0.99); fill.style.width = (Math.floor(s * 20) * 5) + '%'; pct.textContent = Math.floor(s * 100) + '%'; };
+  const ct = setInterval(() => { p = Math.min(p + (cap - p) * 0.08 + 0.001, cap); draw(); }, 120);
+  window.__gbaBoot = {
+    p(v, txt) { cap = Math.max(cap, v); p = Math.max(p, Math.min(v, 0.99)); if (txt) lbl.textContent = txt; draw(); },
+    done() {
+      clearInterval(ct); clearInterval(lt);
+      fill.style.width = '100%'; pct.textContent = '100%';
+      boot.style.transition = 'opacity .45s'; boot.style.opacity = '0';
+      setTimeout(() => boot.remove(), 500);
+      window.__gbaBoot = null;
+    }
+  };
+  draw();
+})();
+</script>
 <div id="camview"><div class="ring"><img alt="live traffic camera"><div class="live"><i></i>LIVE</div><button class="x" title="close">✕</button></div><div class="name"></div></div>
 <div id="personaCard"><button class="x" title="close">✕</button><div class="phead"></div><div class="pbody"></div><div class="pfoot"></div><canvas id="pcAv"></canvas></div>
 <div id="dbg"></div>
@@ -765,6 +818,8 @@ addEventListener('error', e => { window.__moduleError = e.message + ' @ ' + e.fi
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+
+window.__gbaBoot?.p(0.12, 'engine loaded…'); // §26e boot bar: three.js imports resolved, module running
 
 /* ============================================================
    0. Seeded RNG + math helpers (no Math.random anywhere)
@@ -1506,13 +1561,39 @@ const F_WTOWER = 1, F_HVAC = 2, F_CORNICE = 4, F_FIRESC = 8, F_TALL = 16;
    ALL generation below builds on real geometry. These indexes are
    also the future agent-query substrate (edge/node/block ids).
    ============================================================ */
+// §26e boot bar: stream the three big city files so the bar tracks REAL download bytes
+// (0.15→0.45 of the bar). Deployed responses are gzipped (Content-Length = compressed,
+// the reader yields decompressed bytes) so the fraction is clamped — worst case the
+// download segment just fills early. bootStep() then yields a macrotask at generation
+// milestones so the frozen-main-thread build phase still repaints the bar between
+// sections. Both are no-ops when the boot screen isn't up (desktop / after load).
+const _dl = { got: 0, total: 0 };
+async function fetchJP(url) {
+  const r = await fetch(url);
+  if (!window.__gbaBoot || !r.body) return r.json();
+  _dl.total += (+r.headers.get('Content-Length')) || 9e6; // header missing → rough slice so the bar still moves
+  const rd = r.body.getReader(), chunks = [];
+  for (;;) {
+    const { done, value } = await rd.read();
+    if (done) break;
+    chunks.push(value); _dl.got += value.length;
+    window.__gbaBoot?.p(0.15 + 0.3 * Math.min(_dl.got / _dl.total, 1));
+  }
+  let n = 0; for (const c of chunks) n += c.length;
+  const buf = new Uint8Array(n); let o = 0;
+  for (const c of chunks) { buf.set(c, o); o += c.length; }
+  return JSON.parse(new TextDecoder().decode(buf));
+}
+const bootStep = (v, txt) => { if (!window.__gbaBoot) return; window.__gbaBoot.p(v, txt); return new Promise(r => setTimeout(r, 0)); };
+window.__gbaBoot?.p(0.15, 'downloading the real city…');
 let [SG_DATA, BLK_DATA, BLDG, QN_CLAIMS, QN_EAST_RAW] = await Promise.all([ // let: build-time data, released after generation (PERF.md C1)
-  fetch('streets.json').then(r => r.json()),
-  fetch('blocks.json').then(r => r.json()),
-  fetch('buildings.json').then(r => r.json()), // 305k REAL buildings as oriented boxes (one-time local bake)
+  fetchJP('streets.json'),
+  fetchJP('blocks.json'),
+  fetchJP('buildings.json'), // 305k REAL buildings as oriented boxes (one-time local bake)
   fetch('qn-claims.json').then(r => r.ok ? r.json() : []).catch(() => []), // Queens Tier-A claim circles (suppress replaced boxes; missing file = no claims)
   fetch('qn-east-land.json').then(r => r.ok ? r.json() : null).catch(() => null) // eastern Queens land bitmask (CD6/CD7 + Glendale: off-plate real fabric)
 ]);
+await bootStep(0.47, 'unpacking the city…'); // §26e boot bar: data down, generation begins (yield → repaint)
 // Eastern Queens land mask (Flushing/College Point/Whitestone/Rego Park/Forest Hills/
 // Glendale): a packed occupancy bitmask from the baked building coverage — coast-accurate
 // (buildings stop at the shore). Enables landOK (streets + residents) AND suppresses the
@@ -2391,6 +2472,7 @@ QB.ISL.ri.length = 0; for (const pt of [[1542.9, 7524.7], [1554.4, 7644.7], [158
 { const RL = { cornell: [1649, 8123], fourfreedoms: [1602, 7338], rilight: [1546, 10005], octagon: [1823, 9569], tram_r: [1478, 8476] };
   for (const k in RL) QB.lm[k] = RL[k]; }
 
+await bootStep(0.5, 'etching the streets…'); // §26e boot bar (yield → repaint)
 /* ============================================================
    13. Ground canvas (streets etched + painted long shadows)
    ============================================================ */
@@ -2868,6 +2950,7 @@ scene.add(water);
   scene.add(bayMesh);
 }
 
+await bootStep(0.56, 'raising the skyline…'); // §26e boot bar (yield → repaint)
 /* ============================================================
    17. FAR tier — merged district geometry (one draw per chunk)
    ============================================================ */
@@ -3049,6 +3132,7 @@ const midMeshes = [];
   scene.add(im);
 }
 
+await bootStep(0.62, 'building Brooklyn…'); // §26e boot bar (yield → repaint)
 /* ============================================================
    19b. BROOKLYN + LIC/ASTORIA — geo-first real-map build
    Real coastline land, real parks, real arterials, and block
@@ -3453,6 +3537,7 @@ const NECKLACE = []; // bridge/arch light positions (consumed by section 21's em
   console.log('[qns+bronx] built', qbCount, 'buildings,', streetKm.toFixed(0), 'km of drawn streets');
 }
 
+await bootStep(0.7, 'paving the boroughs…'); // §26e boot bar (yield → repaint)
 /* ============================================================
    19d. STREET-TRUTH boroughs — every drivable street as a real
    ribbon from the CSCL graph, every building placed along the
@@ -3869,6 +3954,7 @@ const NECKLACE = []; // bridge/arch light positions (consumed by section 21's em
   }
 }
 
+await bootStep(0.78, 'placing the landmarks…'); // §26e boot bar (yield → repaint)
 /* ============================================================
    21. Landmarks + bridges (true silhouettes, true placements)
    ============================================================ */
@@ -4289,6 +4375,7 @@ harlemBridge(21100, 20900, 34, 28, 16, [0.45, 0.52, 0.48]); // Henry Hudson (Spu
    arrays from the 26 MB JSON parse before the live modules spin up. */
 SG_DATA = BLK_DATA = BLDG = G_BLOCKS = null;
 
+await bootStep(0.84, 'hailing cabs…'); // §26e boot bar (yield → repaint)
 /* ============================================================
    22. Traffic — instanced streams with flow character
    ============================================================ */
@@ -4721,6 +4808,7 @@ const airlife = (() => {
   return { update, setWeather, jet }; // jet exposed so live flights can hide the decoy
 })();
 
+await bootStep(0.88, 'zooming in…'); // §26e boot bar (yield → repaint)
 /* ============================================================
    24. NEAR tier — streamed detail cells around the camera
    ============================================================ */
@@ -5509,6 +5597,7 @@ function resizeRenderer() {
 }
 addEventListener('resize', resizeRenderer);
 applyQuality(TIER); // auto-selected device tier (PERF.md A); hash q= still overrides
+await bootStep(0.93, 'waking the city…'); // §26e boot bar: scene built, live layers wiring up (yield → repaint)
 
 /* ============================================================
    26e. GBA MOBILE SHELL — mode gating + control wiring
@@ -5523,7 +5612,7 @@ applyQuality(TIER); // auto-selected device tier (PERF.md A); hash q= still over
    ============================================================ */
 {
   // ---- mode gating: rotate/resize across the breakpoint flips the class + re-frames ----
-  const GBA_HINT = 'D-pad moves · dial rotates & lifts · drag to look';
+  const GBA_HINT = 'D-pad moves · stick rotates · +/− lifts · drag to look';
   function applyGbaMode() {
     const on = gbaActive();
     document.body.classList.toggle('gba', on);
@@ -5536,13 +5625,14 @@ applyQuality(TIER); // auto-selected device tier (PERF.md A); hash q= still over
   }
 
   // ---- the two console pads drive the SAME fly camera as drag-to-look (§26c), so
-  //      the D-pad and rotation dial coexist with dragging the screen. Movement and
-  //      elevation nudge camera.position directly; rotation nudges fly's yaw/pitch,
+  //      the D-pad and look joystick coexist with dragging the screen. Movement and
+  //      elevation nudge camera.position directly; the stick nudges fly's yaw/pitch,
   //      which fly.tick turns into the camera orientation each frame. While a control
   //      is held, fly's joystick/keys stay at zero so its own velocity is ~0 and never
   //      fights these direct moves. ----
   const _gv = new THREE.Vector3();
-  const acts = new Set();               // held control tokens (mf/mb/ml/mr + ro/ru/rl/rr/eu/ed)
+  const acts = new Set();               // held control tokens (mf/mb/ml/mr + eu/ed + lk while the stick is held)
+  const lk = { x: 0, y: 0 };            // look-joystick vector, unit circle (analog yaw/pitch)
   const ROT_RATE = 0.9, PITCH_MAX = 1.5; // rad/s for turns/tilt; matches §26c's clamp
   let gRaf = 0, gLast = 0;
   function moveStep(dt) {
@@ -5564,10 +5654,10 @@ applyQuality(TIER); // auto-selected device tier (PERF.md A); hash q= still over
   }
   function rotStep(dt) {
     const st = fly.st, a = ROT_RATE * dt;
-    if (acts.has('rl')) st.yaw -= a;              // right arc → view turns right (mirrored display)
-    if (acts.has('rr')) st.yaw += a;              // left arc  → view turns left
-    if (acts.has('ro')) st.pitch = clamp(st.pitch + a, -PITCH_MAX, PITCH_MAX); // top ↑ button → look up
-    if (acts.has('ru')) st.pitch = clamp(st.pitch - a, -PITCH_MAX, PITCH_MAX); // bottom ↓ button → look down
+    if (lk.x || lk.y) { // look joystick: analog yaw/pitch (same signs the old buttons used:
+      st.yaw += a * lk.x;                                            // push right → view turns per the shipped button feel
+      st.pitch = clamp(st.pitch - a * lk.y, -PITCH_MAX, PITCH_MAX);  // push up → look up
+    }
     const ev = Math.max(camera.position.y * ROT_RATE, 25) * dt;
     if (acts.has('eu')) camera.position.y = clamp(camera.position.y + ev, 6, 26000); // + → rise
     if (acts.has('ed')) camera.position.y = clamp(camera.position.y - ev, 6, 26000); // − → descend
@@ -5591,14 +5681,39 @@ applyQuality(TIER); // auto-selected device tier (PERF.md A); hash q= still over
     el.addEventListener('pointerdown', down);
     for (const t of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(t, up);
   }
-  // D-pad keys → horizontal movement; rotation dial reuses the desktop data-act codes
+  // D-pad keys → horizontal movement
   const DIR2MOVE = { u: 'mf', d: 'mb', l: 'ml', r: 'mr' };
   for (const b of document.querySelectorAll('#gbaDpad .dp')) bindHold(b, DIR2MOVE[b.dataset.dir]);
-  for (const b of document.querySelectorAll('#gbaRot .db')) bindHold(b, b.dataset.act);
   for (const b of document.querySelectorAll('#gbaSS .ssb')) bindHold(b, b.dataset.act); // +/− elevation pills
   for (const b of document.querySelectorAll('#presets button')) b.addEventListener('pointerdown', buzz); // shortcut icons buzz too
 
-  window.__gba = { applyGbaMode, active: gbaActive, acts }; // dev/testing hook
+  // ---- look joystick: analog rotation. Tracks like §26c's #joy (rect math, pointer
+  //      capture); the knob rides the thumb up to ~26px and lk feeds rotStep. The 'lk'
+  //      token keeps gLoop alive while held. ----
+  {
+    const stick = document.getElementById('gbaStick'), knob = document.getElementById('gbaStickK');
+    let sid = null;
+    const setKnob = () => { knob.style.transform = 'translate(calc(-50% + ' + (lk.x * 26) + 'px), calc(-50% + ' + (lk.y * 26) + 'px))'; };
+    const track = (e) => {
+      const r = stick.getBoundingClientRect();
+      let dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+      let dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+      const m = Math.hypot(dx, dy);
+      if (m > 1) { dx /= m; dy /= m; }
+      lk.x = dx; lk.y = dy;
+      setKnob();
+    };
+    stick.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); try { stick.setPointerCapture(e.pointerId); } catch { }
+      sid = e.pointerId; stick.classList.add('pressed'); buzz();
+      track(e); gStart('lk');
+    });
+    stick.addEventListener('pointermove', (e) => { if (e.pointerId === sid) track(e); });
+    for (const t of ['pointerup', 'pointercancel'])
+      stick.addEventListener(t, (e) => { if (e.pointerId === sid) { sid = null; lk.x = lk.y = 0; setKnob(); stick.classList.remove('pressed'); acts.delete('lk'); } });
+  }
+
+  window.__gba = { applyGbaMode, active: gbaActive, acts, lk }; // dev/testing hook
 }
 
 /* ============================================================
@@ -10353,6 +10468,7 @@ let T = 0, fpsT = 0, fpsN = 0;
 const _focus = new THREE.Vector3();
 function easeInOut(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
 function frame() {
+  if (window.__gbaBoot) window.__gbaBoot.done(); // §26e: first real frame → fade the boot screen (one-shot; done() nulls the hook)
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), 0.05);
   T += dt;
