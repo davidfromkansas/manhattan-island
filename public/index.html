@@ -1360,7 +1360,11 @@ const BK_RINGS = [
   [3550, 5200, -500, 950], [5000, 6950, -400, 1450], [6300, 7650, -850, 350], [5050, 6750, -1800, -450],   // prospect hts, crown hts+weeksville, crown hts s+wingate, prospect-lefferts
   [5600, 7950, 2850, 5150],                                                                                 // bushwick
   [7650, 9100, 1950, 3550], [8750, 10550, 3450, 5250], [8650, 10750, 1350, 3450],                           // broadway jct, cypress hills+highland pk, east new york
-  [9750, 11550, 3050, 4750], [9450, 11250, 850, 2250], [9850, 12450, 50, 1750]                              // city line, new lots, starrett city+spring creek
+  [9750, 11550, 3050, 4750], [9450, 11250, 850, 2250], [9850, 12450, 50, 1750],                              // city line, new lots, starrett city+spring creek
+  // south Brooklyn (BK10-18)
+  [1500, 4400, -9600, -6000], [4400, 6300, -8750, -5900], [6300, 8900, -8750, -5900], [8900, 12200, -8700, -5800], // bay ridge, bensonhurst, gravesend, sheepshead
+  [5400, 9900, -11600, -8750], [4100, 6100, -5900, -3600], [6100, 7900, -5900, -3600], [4100, 7000, -3600, -250],  // coney island, borough park, midwood, flatbush
+  [7000, 9400, -2300, -150], [7000, 9400, -150, 1950], [9400, 11300, -2300, 50], [7900, 11900, -5800, -2300]      // east flatbush, brownsville, canarsie, mill basin
 ];
 function inBK(x, z) {
   for (let k = 0; k < BK_RINGS.length; k++) {
@@ -1617,12 +1621,13 @@ async function fetchJP(url) {
 }
 const bootStep = (v, txt) => { if (!window.__gbaBoot) return; window.__gbaBoot.p(v, txt); return new Promise(r => setTimeout(r, 0)); };
 window.__gbaBoot?.p(0.15, 'downloading the real city…');
-let [SG_DATA, BLK_DATA, BLDG, QN_CLAIMS, QN_EAST_RAW] = await Promise.all([ // let: build-time data, released after generation (PERF.md C1)
+let [SG_DATA, BLK_DATA, BLDG, QN_CLAIMS, QN_EAST_RAW, BK_SOUTH_RAW] = await Promise.all([ // let: build-time data, released after generation (PERF.md C1)
   fetch('streets.json').then(r => r.json()),
   fetch('blocks.json').then(r => r.json()),
   fetchJP('buildings.json'), // 305k REAL buildings as oriented boxes (one-time local bake)
   fetch('qn-claims.json').then(r => r.ok ? r.json() : []).catch(() => []), // Queens Tier-A claim circles (suppress replaced boxes; missing file = no claims)
-  fetch('qn-east-land.json').then(r => r.ok ? r.json() : null).catch(() => null) // eastern Queens land bitmask (CD6/CD7 + Glendale: off-plate real fabric)
+  fetch('qn-east-land.json').then(r => r.ok ? r.json() : null).catch(() => null), // eastern Queens land bitmask (CD6/CD7 + Glendale: off-plate real fabric)
+  fetch('bk-south-land.json').then(r => r.ok ? r.json() : null).catch(() => null) // south Brooklyn land bitmask (Coney peninsula + Jamaica Bay basins, from building coverage)
 ]);
 await bootStep(0.47, 'unpacking the city…'); // §26e boot bar: data down, generation begins (yield → repaint)
 // Eastern Queens land mask (Flushing/College Point/Whitestone/Rego Park/Forest Hills/
@@ -1634,6 +1639,19 @@ if (QN_EAST_RAW) {
   const a = atob(QN_EAST_RAW.bits), bytes = new Uint8Array(a.length);
   for (let i = 0; i < a.length; i++) bytes[i] = a.charCodeAt(i);
   QN_EAST = { x0: QN_EAST_RAW.x0, z0: QN_EAST_RAW.z0, cell: QN_EAST_RAW.cell, w: QN_EAST_RAW.w, h: QN_EAST_RAW.h, bytes };
+}
+let BK_SOUTH = null;
+if (BK_SOUTH_RAW) {
+  const a = atob(BK_SOUTH_RAW.bits), bytes = new Uint8Array(a.length);
+  for (let i = 0; i < a.length; i++) bytes[i] = a.charCodeAt(i);
+  BK_SOUTH = { x0: BK_SOUTH_RAW.x0, z0: BK_SOUTH_RAW.z0, cell: BK_SOUTH_RAW.cell, w: BK_SOUTH_RAW.w, h: BK_SOUTH_RAW.h, bytes };
+}
+function inBkSouth(x, z) {
+  if (!BK_SOUTH) return false;
+  const gx = ((x - BK_SOUTH.x0) / BK_SOUTH.cell) | 0, gz = ((z - BK_SOUTH.z0) / BK_SOUTH.cell) | 0;
+  if (gx < 0 || gx >= BK_SOUTH.w || gz < 0 || gz >= BK_SOUTH.h) return false;
+  const bit = gx * BK_SOUTH.h + gz;
+  return (BK_SOUTH.bytes[bit >> 3] & (128 >> (bit & 7))) !== 0;
 }
 function inQnEast(x, z) {
   if (!QN_EAST) return false;
@@ -2490,6 +2508,8 @@ function landOK(x, z) {
   if (bayContains(x, z)) return false;
   { const qw = qwShoreX(z); if (qw !== null && x < qw && !riIslContains(x, z)) return false; } // East Channel is water (real DCP bank)
   if (typeof inQnEast === 'function' && inQnEast(x, z)) return true;   // eastern Queens real-fabric land (CD6/CD7 + Glendale)
+  if (typeof inBkSouth === 'function' && BK_SOUTH && (z < -8480 || x > 8780) && x > 1200 && z < 400 && z > -11900 && x < 12600)
+    return inBkSouth(x, z);                                           // south Brooklyn off-plate: building-coverage mask is authoritative (bays/basins = water)
   if (z > 12800 && z < 21500) { // Harlem corridor: keep east of the visual channel
     const ee = Math.max(bxShoreX(z) ?? -1e9, coastAt(Math.min(z, 21000)).e + 40) + 12;
     if (x < ee) return false;
@@ -3797,6 +3817,20 @@ await bootStep(0.7, 'paving the boroughs…'); // §26e boot bar (yield → repa
   registerDcpChunk('bk-new-lots.json', 10346, 1543, 1168);            // New Lots
   registerDcpChunk('bk-starrett-springcreek.json', 10761, 1011, 1195);// Starrett City / Spring Creek (Jamaica Bay)
 
+  // south Brooklyn (BK10-18) — the Atlantic / Jamaica Bay south shore
+  registerDcpChunk('bk-bayridge.json', 2999, -7645, 2179);        // Bay Ridge / Dyker Heights / Fort Hamilton
+  registerDcpChunk('bk-bensonhurst.json', 5355, -7322, 1734);     // Bath Beach / Bensonhurst / Mapleton
+  registerDcpChunk('bk-gravesend.json', 7600, -7316, 1949);       // Gravesend / Kings Hwy / Homecrest
+  registerDcpChunk('bk-sheepshead.json', 10186, -7238, 1977);     // Sheepshead Bay / Manhattan Beach / Gerritsen / Plumb Beach
+  registerDcpChunk('bk-coney.json', 7567, -10072, 2576);          // Coney Island / Brighton Beach / Sea Gate / West Brighton
+  registerDcpChunk('bk-boroughpark.json', 5098, -4772, 1561);     // Borough Park
+  registerDcpChunk('bk-midwood.json', 6995, -4740, 1497);         // Midwood / Ocean Parkway
+  registerDcpChunk('bk-flatbush.json', 5802, -2626, 1572);        // Flatbush / Ditmas Park / PPS / Kensington / Erasmus
+  registerDcpChunk('bk-eastflatbush.json', 8061, -1221, 1535);    // East Flatbush / Farragut / Remsen Vlg / Rugby
+  registerDcpChunk('bk-brownsville.json', 8269, 894, 1553);       // Brownsville / Ocean Hill
+  registerDcpChunk('bk-canarsie.json', 10341, -1068, 1544);       // Canarsie / Paerdegat Basin
+  registerDcpChunk('bk-millbasin.json', 9769, -4051, 2585);       // Mill Basin / Marine Park / Flatlands / Bergen Beach / Georgetown
+
   // Manhattan — real DCP massing, Battery Park City → Inwood + Randalls/Wards + Central Park
   registerDcpChunk('mn-battery-bpc.json', 86, 1502, 809);            // Battery Park City / South St Seaport
   registerDcpChunk('mn-tribeca-seaport.json', 524, 2240, 1283);      // Tribeca / Civic Center / Two Bridges
@@ -3818,6 +3852,30 @@ await bootStep(0.7, 'paving the boroughs…'); // §26e boot bar (yield → repa
   registerDcpChunk('mn-inwood.json', -860, 19778, 1373);             // Inwood
   registerDcpChunk('mn-randalls-wards.json', 2058, 12903, 730);      // Randalls / Wards Islands
   registerDcpChunk('mn-central-park.json', -317, 10369, 1493);       // Central Park structures
+  // South-Brooklyn ground (always-resident, 40 KB): building-coverage land mesh for the
+  // off-plate region — the Coney peninsula, the Atlantic beach strip (sand), and the Jamaica
+  // Bay side with Sheepshead Bay / Gerritsen / Mill Basin / Paerdegat as open water.
+  fetch('bk-south-land.bin').then(r => r.arrayBuffer()).then(buf => {
+    const dv = new DataView(buf);
+    if (dv.getUint32(0, true) !== 0x3143594E) return;
+    const i32 = dv.getUint8(6) & 1, nv = dv.getUint32(8, true);
+    const sc = [dv.getFloat32(16, true), dv.getFloat32(20, true), dv.getFloat32(24, true)];
+    const of = [dv.getFloat32(28, true), dv.getFloat32(32, true), dv.getFloat32(36, true)];
+    let o = 40;
+    const q = new Uint16Array(buf, o, nv * 3); o += nv * 6;
+    const pos = new Float32Array(nv * 3);
+    for (let i = 0; i < nv * 3; i++) pos[i] = q[i] / 65535 * sc[i % 3] + of[i % 3];
+    const col = new Uint8Array(buf.slice(o, o + nv * 3)); o += nv * 3;
+    const idx = i32 ? new Uint32Array(buf.slice(o)) : new Uint16Array(buf.slice(o));
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3, true));
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
+    g.computeVertexNormals();
+    const mat = patchClouds(new THREE.MeshLambertMaterial({ vertexColors: true,
+      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }), true);
+    const gm = new THREE.Mesh(g, mat); gm.matrixAutoUpdate = false; scene.add(gm);
+  }).catch(() => {});
   window.__dcp = DCP_CHUNKS; // dev: streaming state
   streamDcpChunks();                    // initial pass (loads only chunks near the start camera)
   setInterval(streamDcpChunks, 700);    // stream as the camera moves

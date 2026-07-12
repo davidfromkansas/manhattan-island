@@ -6,6 +6,37 @@ the rules on adding entries.
 
 ---
 
+## 🎢 South Brooklyn: Coney Island to Canarsie, with the real Atlantic / Jamaica Bay shore
+
+**Shipped:** July 12, 2026
+
+**TL;DR:** All of southern Brooklyn now renders real DCP massing — Bay Ridge, Dyker
+Heights, Fort Hamilton, Bath Beach, Bensonhurst, Mapleton, Borough Park, Kensington,
+Ocean Parkway, Coney Island, Sea Gate, Brighton Beach, West Brighton, Gravesend,
+Homecrest, Kings Highway, Sheepshead Bay, Manhattan Beach, Gerritsen Beach, Plumb Beach,
+Ditmas Park, Flatbush, Midwood, Prospect Park South, Brownsville, Ocean Hill, East
+Flatbush (Farragut/Remsen Village/Rugby/Erasmus), Flatlands, Marine Park, Mill Basin,
+Mill Island, Bergen Beach, Georgetown, Paerdegat Basin and Canarsie — with the southern
+shoreline derived from the real building fabric.
+
+**What you'll see:** the Coney Island peninsula with a sand beach strip along the
+Atlantic; **Sheepshead Bay, Gerritsen Creek, Coney Island Creek, Mill Basin and
+Paerdegat Basin as real water inlets** cutting into the land; Gerritsen Beach's
+distinctive curved street grid; Marine Park and Floyd Bennett Field as green open
+space; and dense rowhouse fabric everywhere in between.
+
+**How it works:** geometry from DCP tiles **BK10–BK18** baked to 12 streamed chunks
+(~3.5M tris). South Brooklyn extends past the borough ground plate on two sides (south
+of the old z-edge and east into Jamaica Bay), so land there comes from a new
+**building-coverage cell mask** (`scripts/bk_south_land.py`): 40 m cells rasterised from
+~620k footprints, morphologically closed, with the narrow inlets the closing would
+bridge carved back out as real-coordinate water capsules. The mask drives both an
+always-resident 45 KB ground mesh (land/sand/marsh) and the `landOK` gate (personas and
+streets respect the new water). Verified with a 12-point land/water audit — every bay,
+inlet, beach and island reads correctly.
+
+---
+
 ## 🏙️ Manhattan: instant procedural base, real detail on approach (progressive LOD)
 
 **Shipped:** July 12, 2026
