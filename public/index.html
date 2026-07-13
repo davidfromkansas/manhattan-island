@@ -159,7 +159,7 @@
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #wxAlerts .wxr b { color:#7a2d12; flex:none; }
   #ticker { /* live NYC headlines (amNY + THE CITY) — strip flush with the screen bottom (#ui floats above) */
-    position:fixed; left:0; right:0; bottom:0; z-index:9; height:34px; display:none;
+    position:fixed; left:0; right:0; bottom:0; z-index:12; height:34px; display:none; /* z12: above the entity chips (z9) — nothing covers the tickers */
     overflow:hidden; user-select:none;
     font:12.5px/34px 'Arial Rounded MT Bold','Trebuchet MS',system-ui,sans-serif;
     background:linear-gradient(180deg,rgba(255,255,255,.72),rgba(226,237,251,.72));
@@ -169,9 +169,9 @@
   #ticker .tkin { display:inline-flex; white-space:nowrap; will-change:transform;
     animation:tkscroll linear infinite; }
   #ticker:hover .tkin { animation-play-state:paused; }
-  #ticker a { color:#17418a; text-decoration:none; padding:0 14px; }
+  #ticker a { color:#000; text-decoration:none; padding:0 14px; } /* black: legible over the busy scene */
   #ticker a:hover { text-decoration:underline; }
-  #ticker .src { color:#7a93bb; font-size:10px; margin-right:7px; letter-spacing:.4px; }
+  #ticker .src { color:#555; font-size:10px; margin-right:7px; letter-spacing:.4px; }
   #ticker i.sep { color:#9fb6da; font-style:normal; }
   @keyframes tkscroll { from { transform:translateX(0); } to { transform:translateX(-50%); } }
   body.photo #ticker, body.focusmode #ticker, body.manual #ticker { display:none !important; }
@@ -195,7 +195,7 @@
     }
   }
   #thoughtTicker { /* resident-thought marquee — stacked right above the headlines */
-    position:fixed; left:0; right:0; bottom:34px; z-index:9; height:30px; display:none;
+    position:fixed; left:0; right:0; bottom:34px; z-index:12; height:30px; display:none; /* z12: above the entity chips (z9) */
     overflow:hidden; user-select:none;
     font:12px/30px 'Arial Rounded MT Bold','Trebuchet MS',system-ui,sans-serif;
     background:linear-gradient(180deg,rgba(240,246,255,.66),rgba(216,230,249,.66));
@@ -205,10 +205,10 @@
   #thoughtTicker.solo { bottom:0; } /* headlines strip hidden → drop flush with the screen edge */
   #thoughtTicker .tkin { display:inline-flex; white-space:nowrap; will-change:transform; animation:tkscroll linear infinite; }
   #thoughtTicker:hover .tkin { animation-play-state:paused; }
-  #thoughtTicker .th { color:#17418a; cursor:pointer; padding:0 14px; }
+  #thoughtTicker .th { color:#000; cursor:pointer; padding:0 14px; } /* black: legible over the busy scene */
   #thoughtTicker .th:hover { text-decoration:underline; }
   #thoughtTicker .th .ic { margin-right:6px; text-decoration:none; display:inline-block; }
-  #thoughtTicker .th .who { color:#7a93bb; font-size:10px; margin-left:7px; letter-spacing:.3px; }
+  #thoughtTicker .th .who { color:#555; font-size:10px; margin-left:7px; letter-spacing:.3px; }
   #thoughtTicker i.sep { color:#9fb6da; font-style:normal; }
   @media (min-width: 701px) { body.thticker #ui { bottom:74px; } } /* clears both strips; phones hide the tickers + dock the bar flush */
   body.photo #thoughtTicker, body.focusmode #thoughtTicker, body.manual #thoughtTicker { display:none !important; }
@@ -10902,7 +10902,7 @@ function frame() {
       '<a href="' + esc(it.url) + '" target="_blank" rel="noopener noreferrer">' +
       '<span class="src">' + esc(it.src) + '</span>' + esc(it.t) + '</a><i class="sep">✦</i>').join('');
     tin.innerHTML = seq + seq; // doubled content: the −50% keyframe wraps seamlessly
-    tin.style.animationDuration = Math.max(60, items.length * 9) + 's'; // ~9 s per headline: readable
+    tin.style.animationDuration = Math.round(Math.max(60, items.length * 9) * (matchMedia('(max-width: 700px)').matches ? 0.55 : 1)) + 's'; // ~9 s per headline; phones scroll ~1.8× faster (one strip, less dwell time)
     tk.style.display = 'block';
   }
   function pollNews() {
@@ -10955,7 +10955,7 @@ if (!/cam=|tgt=|scrub=|snap/.test(location.hash)) autoPan.start();
       '<span class="th" data-k="' + k + '"><span class="ic">' + it.ic + '</span>“' + esc(it.t) + '”' +
       '<span class="who">' + esc(it.who) + '</span></span><i class="sep">✦</i>').join('');
     tin.innerHTML = seq + seq; // doubled content: the −50% keyframe wraps seamlessly
-    tin.style.animationDuration = Math.max(60, items.length * 7) + 's';
+    tin.style.animationDuration = Math.round(Math.max(60, items.length * 7) * (matchMedia('(max-width: 700px)').matches ? 0.55 : 1)) + 's'; // phones scroll ~1.8× faster
   }
   tin.addEventListener('click', (e) => {
     const el = e.target.closest('.th');
