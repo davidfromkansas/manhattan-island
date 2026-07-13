@@ -1720,15 +1720,34 @@ const G_NODES = SG_DATA.nodes, G_EDGES = SG_DATA.edges; // runtime substrate —
 let G_BLOCKS = BLK_DATA.blocks;                          // build-time only — released after 19d
 const G_COUNTS = { edges: G_EDGES.length, nodes: G_NODES.length, blocks: G_BLOCKS.length };
 console.log('[graph]', G_COUNTS.edges, 'street edges,', G_COUNTS.nodes, 'nodes,', G_COUNTS.blocks, 'blocks');
+/* M2 (plan-mobile-memory.md): repack every edge polyline into ONE flat Float32Array.
+   The JSON shape (~1.4M tiny [x,z] arrays) costs ~60–90 MB of pure JS object overhead
+   that lives forever; flat stride-2 views cost ~12 MB for the same floats. Every
+   consumer reads x = p[2i], z = p[2i+1], count = p.length >> 1 — the EDGE schema and
+   all join keys (edgeId/edgeT/nodeId, AGENTS.md) are unchanged. Float32 rounding is
+   ≤ ~1.2 mm at the scene's extents — far under matchStreet's meter-scale tolerances. */
+{
+  let total = 0;
+  for (const e of G_EDGES) total += e.p.length * 2;
+  const FLAT = new Float32Array(total);
+  let o = 0;
+  for (const e of G_EDGES) {
+    const src = e.p, n = src.length;
+    for (let i = 0; i < n; i++) { FLAT[o + 2 * i] = src[i][0]; FLAT[o + 2 * i + 1] = src[i][1]; }
+    e.p = FLAT.subarray(o, o + 2 * n);
+    o += 2 * n;
+  }
+}
 // spatial hash of edges (200 m cells) — map-matching + proximity queries
 const EDGE_HASH = new Map();
 const ehKey = (x, z) => ((x / 200) | 0) * 8192 + ((z / 200) | 0);
 for (let ei = 0; ei < G_EDGES.length; ei++) {
-  const p = G_EDGES[ei].p;
-  for (let i = 0; i < p.length - 1; i++) {
-    const n = Math.ceil(Math.hypot(p[i + 1][0] - p[i][0], p[i + 1][1] - p[i][1]) / 180);
+  const p = G_EDGES[ei].p, np = p.length >> 1; // stride-2 flat polyline (M2)
+  for (let i = 0; i < np - 1; i++) {
+    const ax = p[2 * i], az = p[2 * i + 1], bx = p[2 * i + 2], bz = p[2 * i + 3];
+    const n = Math.ceil(Math.hypot(bx - ax, bz - az) / 180);
     for (let k = 0; k <= n; k++) {
-      const x = p[i][0] + (p[i + 1][0] - p[i][0]) * k / n, z = p[i][1] + (p[i + 1][1] - p[i][1]) * k / n;
+      const x = ax + (bx - ax) * k / n, z = az + (bz - az) * k / n;
       for (let ox = -1; ox <= 1; ox++) for (let oz = -1; oz <= 1; oz++) {
         const key = ehKey(x + ox * 200, z + oz * 200);
         let a = EDGE_HASH.get(key); if (!a) { a = []; EDGE_HASH.set(key, a); }
@@ -1743,9 +1762,9 @@ function matchStreet(x, z, maxD = 60, wantAng = null) {
   if (!cand) return null;
   let best = null, bestScore = maxD * maxD;
   for (const ei of cand) {
-    const e = G_EDGES[ei], p = e.p;
-    for (let i = 0; i < p.length - 1; i++) {
-      const ax = p[i][0], az = p[i][1], bx = p[i + 1][0], bz = p[i + 1][1];
+    const e = G_EDGES[ei], p = e.p, np = p.length >> 1; // stride-2 flat polyline (M2)
+    for (let i = 0; i < np - 1; i++) {
+      const ax = p[2 * i], az = p[2 * i + 1], bx = p[2 * i + 2], bz = p[2 * i + 3];
       const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1;
       const t = clamp(((x - ax) * dx + (z - az) * dz) / L2, 0, 1);
       const px = ax + dx * t, pz = az + dz * t;
@@ -2007,10 +2026,11 @@ function generateCity() {
   for (const e of G_EDGES) {
     if (e.bo !== 1 || e.rw === 4) continue;               // Manhattan only; tunnels undrawn
     const kind = e.rw >= 1 && e.rw <= 3 && e.w >= 20 ? 'ave' : e.w >= 15 ? 'st' : 'lane';
-    for (let i = 0; i < e.p.length - 1; i++) {
-      const a = e.p[i], b = e.p[i + 1];
-      if (!onLand((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)) continue; // bridges/ramps leaving the island
-      SEG.push({ x0: a[0], z0: a[1], x1: b[0], z1: b[1], w: e.w, kind });
+    const p = e.p, np = p.length >> 1; // stride-2 flat polyline (M2)
+    for (let i = 0; i < np - 1; i++) {
+      const ax = p[2 * i], az = p[2 * i + 1], bx = p[2 * i + 2], bz = p[2 * i + 3];
+      if (!onLand((ax + bx) / 2, (az + bz) / 2)) continue; // bridges/ramps leaving the island
+      SEG.push({ x0: ax, z0: az, x1: bx, z1: bz, w: e.w, kind });
       segN++;
     }
   }
@@ -3665,14 +3685,15 @@ await bootStep(0.7, 'paving the boroughs…'); // §26e boot bar (yield → repa
   for (const e of G_EDGES) {
     if (e.bo === 1 || e.rw === 3 || e.rw === 4) continue;
     const wRib = Math.min(e.w, 32) * (e.rw === 1 ? 0.9 : 1.2);
-    for (let i = 0; i < e.p.length - 1; i++) {
-      const a = e.p[i], b = e.p[i + 1];
-      const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const p = e.p, np = p.length >> 1; // stride-2 flat polyline (M2)
+    for (let i = 0; i < np - 1; i++) {
+      const ax = p[2 * i], az = p[2 * i + 1], bx = p[2 * i + 2], bz = p[2 * i + 3];
+      const L = Math.hypot(bx - ax, bz - az);
       if (L < 6) continue;
-      if (!landB((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)) continue;
-      const nx = -(b[1] - a[1]) / L * wRib / 2, nz = (b[0] - a[0]) / L * wRib / 2;
-      sinkQuad(SGr, a[0] + nx, 1.45, a[1] + nz, a[0] - nx, 1.45, a[1] - nz,
-               b[0] - nx, 1.45, b[1] - nz, b[0] + nx, 1.45, b[1] + nz, 0, 1, 0, asph, 0, -1);
+      if (!landB((ax + bx) / 2, (az + bz) / 2)) continue;
+      const nx = -(bz - az) / L * wRib / 2, nz = (bx - ax) / L * wRib / 2;
+      sinkQuad(SGr, ax + nx, 1.45, az + nz, ax - nx, 1.45, az - nz,
+               bx - nx, 1.45, bz - nz, bx + nx, 1.45, bz + nz, 0, 1, 0, asph, 0, -1);
       ribKm += L / 1000;
     }
   }
@@ -4531,19 +4552,23 @@ const traffic = (() => {
   const RWK = rng(4242);
   const carY = (x, z) => (onLand(x, z) ? LAND_Y + 0.55 : 1.95); // borough ribbons sit lower than the island
   const dirOK = (e, d) => e.rw !== 4 && e.rw !== 2 && (e.td === 3 || e.td === 0 || (d === 0 ? e.td === 1 : e.td === 2)); // no tunnels, no bridge decks (cars at ground y would drive on the river)
-  const edgeAng = (e, d, atEnd) => {
-    const p = e.p, i = atEnd ? p.length - 2 : 0;
-    const a = d === 0 ? p[i] : p[p.length - 1 - i], b = d === 0 ? p[i + 1] : p[p.length - 2 - i];
-    return Math.atan2(b[1] - a[1], b[0] - a[0]);
+  const edgeAng = (e, d, atEnd) => { // stride-2 flat polyline (M2): a→b in traversal order d
+    const p = e.p, n = p.length >> 1;
+    const i = d === 0 ? (atEnd ? n - 2 : 0) : (atEnd ? 1 : n - 1);
+    const j = d === 0 ? i + 1 : i - 1;
+    return Math.atan2(p[2 * j + 1] - p[2 * i + 1], p[2 * j] - p[2 * i]);
   };
   function walkRoute(ei0, d0, maxLen) {
     const pts = [];
     let ei = ei0, d = d0, len = 0, guard = 0, prevEi = -1;
     while (len < maxLen && guard++ < 70) {
       const e = G_EDGES[ei];
-      const p = d === 0 ? e.p : [...e.p].reverse();
-      for (let i = pts.length ? 1 : 0; i < p.length; i++) pts.push(v3(p[i][0], carY(p[i][0], p[i][1]), p[i][1]));
-      for (let i = 0; i < p.length - 1; i++) len += Math.hypot(p[i + 1][0] - p[i][0], p[i + 1][1] - p[i][1]);
+      const p = e.p, np = p.length >> 1; // stride-2 flat polyline (M2): walk indices, no reversed copy
+      for (let k = pts.length ? 1 : 0; k < np; k++) {
+        const j = d === 0 ? k : np - 1 - k, px2 = p[2 * j], pz2 = p[2 * j + 1];
+        pts.push(v3(px2, carY(px2, pz2), pz2));
+      }
+      for (let k = 0; k < np - 1; k++) len += Math.hypot(p[2 * k + 2] - p[2 * k], p[2 * k + 3] - p[2 * k + 1]);
       const n = d === 0 ? e.b : e.a;
       const arrive = edgeAng(e, d, true);
       let best = -1, bestD = 1e9, bestDir = 0;
@@ -4552,8 +4577,8 @@ const traffic = (() => {
         const e2 = G_EDGES[ej];
         const d2 = e2.a === n ? 0 : 1;
         if (!dirOK(e2, d2)) continue;
-        const em = e2.p[e2.p.length >> 1];
-        if (!onLand(em[0], em[1]) && !landOK(em[0], em[1])) continue; // never walk onto water streets
+        const pm = e2.p, mi = (pm.length >> 1) >> 1, emx = pm[2 * mi], emz = pm[2 * mi + 1]; // mid point (M2)
+        if (!onLand(emx, emz) && !landOK(emx, emz)) continue; // never walk onto water streets
         let da = Math.abs(edgeAng(e2, d2, false) - arrive) % (2 * Math.PI);
         if (da > Math.PI) da = 2 * Math.PI - da;
         da += RWK() * 0.35; // slight wander so flows spread over the grid
@@ -4570,8 +4595,8 @@ const traffic = (() => {
       const ei = (RWK() * G_EDGES.length) | 0;
       const e = G_EDGES[ei];
       if (e.rw >= 2) continue;                        // ramps/tunnels/bridge decks are not route seeds
-      const sm = e.p[0];
-      if (!onLand(sm[0], sm[1]) && !landOK(sm[0], sm[1])) continue; // no routes seeded off-fabric
+      const smx = e.p[0], smz = e.p[1]; // first point (M2 stride-2)
+      if (!onLand(smx, smz) && !landOK(smx, smz)) continue; // no routes seeded off-fabric
       const d = dirOK(e, 0) ? 0 : dirOK(e, 1) ? 1 : -1;
       if (d < 0) continue;
       const pts = walkRoute(ei, d, 1400 + RWK() * 2200);
@@ -8163,8 +8188,11 @@ const citibike = (() => {
       }
       if (best < 0) break;
       const e = G_EDGES[best];
-      const p = e.a === cur ? e.p : [...e.p].reverse();
-      for (let i = pts.length ? 1 : 0; i < p.length; i++) pts.push(p[i]);
+      const p = e.p, n = p.length >> 1, fwd = e.a === cur; // stride-2 flat polyline (M2); route pts stay [x,z] pairs
+      for (let k = pts.length ? 1 : 0; k < n; k++) {
+        const j = fwd ? k : n - 1 - k;
+        pts.push([p[2 * j], p[2 * j + 1]]);
+      }
       seen.add(bestN); prevE = best; cur = bestN;
     }
     return pts.length > 2 ? pts : null;
@@ -9071,8 +9099,8 @@ const personas = (() => {
             dx = Math.sin(wyaw) * 0.01, dz = Math.cos(wyaw) * 0.01, spd = 0;
           const ms = matchStreet(g2.x, g2.z, 300);
           if (ms && G_EDGES[ms.ei].rw === 0) {
-            const e = G_EDGES[ms.ei], a = e.p[ms.seg], b = e.p[ms.seg + 1];
-            let vx = b[0] - a[0], vz = b[1] - a[1];
+            const e = G_EDGES[ms.ei], p = e.p, s2 = 2 * ms.seg; // stride-2 flat polyline (M2); seg stays a point index
+            let vx = p[s2 + 2] - p[s2], vz = p[s2 + 3] - p[s2 + 1];
             const sl = Math.hypot(vx, vz);
             if (sl > 26) {
               vx /= sl; vz /= sl;
@@ -9878,11 +9906,13 @@ const rtraffic = (() => {
       if (e.rw === 4) continue;
       const mph = (a.sum / a.n) * 2.237;
       spdColorL(mph, _rc);
-      const pts = e.p.map(p => { // probes nest just above the E-ZPass/DOT ribbons
-        if (e.rw === 2) return [p[0], 46.2, p[1]];
-        const ey = e.rw >= 1 ? elevAt(p[0], p[1]) : null; // express buses ride the viaducts
-        return [p[0], ey !== null ? ey + 0.6 : (onLand(p[0], p[1]) ? LAND_Y + 0.5 : 1.9), p[1]];
-      });
+      const pts = []; // probes nest just above the E-ZPass/DOT ribbons (stride-2 flat polyline, M2)
+      for (let k = 0, n = e.p.length >> 1; k < n; k++) {
+        const px2 = e.p[2 * k], pz2 = e.p[2 * k + 1];
+        if (e.rw === 2) { pts.push([px2, 46.2, pz2]); continue; }
+        const ey = e.rw >= 1 ? elevAt(px2, pz2) : null; // express buses ride the viaducts
+        pts.push([px2, ey !== null ? ey + 0.6 : (onLand(px2, pz2) ? LAND_Y + 0.5 : 1.9), pz2]);
+      }
       ribbonQuads(P, C, pts, 5, _rc);
       const mid = pts[pts.length >> 1];
       PRB.edges.push({ mph, n: a.ids.size, nm: e.nm || '', mid, pts }); // pts kept: the speed field paints them
