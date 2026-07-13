@@ -89,6 +89,7 @@ Capture after each workstream lands (same method as baseline: preview server 419
 | C2a (typed sinks) | **1105 MB** | 517 MB | 5.97 M | 83 | 15,607 | 55* | peak −343 MB vs baseline; post-generateCity 575→83 MB |
 | C2b (compress+dispose) | ~1105 MB | **86 MB** | 5.94 M | 82 | 15,607 | 52* | settle −431 MB; GPU vertex memory −48%; visuals verified noon+dusk |
 | M0 baseline (plan-mobile-memory.md), post-DCP/LOD city | 364 MB | 331 MB | 4.17 M | 62 | — | — | desktop `high`, hero view, 16 full + 54 LOD chunks resident. `__perfReport()`: **chunk CPU-resident 136.8 MB + GPU 136.8 MB** (worker path never got C2b's onUpload dispose — M1a target ≈0); decode avg 664 ms / p95 865 ms; tFirstFrame 3.6 s (localhost); fps n/a (automated tab). iPhone row pending user capture via `__perfRoute()`. |
+| M1 (chunk diet: onUpload dispose + Int8 normals + warm-up sweep) | 325 MB | ~256–305 MB† | — | — | — | — | same view/chunks as M0. **Chunk CPU-resident 136.8 → 0 MB; chunk GPU 136.8 → 102.5 MB (−25%, Int8 normals)**. †heap readings vary with GC timing in the automated tab — the structural win is the cpuMB 0 counter. Visual gates: hero + street level OK, lighting/normals correct. iPhone re-test pending. |
 
 ---
 

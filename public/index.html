@@ -1403,13 +1403,15 @@ function decodeBakedMesh(j) {
   const q = new Uint16Array(u8(j.v).buffer), pos = new Float32Array(q.length);
   for (let i = 0; i < q.length; i += 3) for (let k = 0; k < 3; k++) pos[i + k] = q[i + k] / 65535 * j.scale[k] + j.off[k];
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(u8(j.c), 3, true));
-  if (j.s) g.setAttribute('aSeed', new THREE.BufferAttribute(u8(j.s), 1));
-  if (j.k) g.setAttribute('aKind', new THREE.BufferAttribute(u8(j.k), 1));
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3).onUpload(disposeArray));
+  g.setAttribute('color', new THREE.BufferAttribute(u8(j.c), 3, true).onUpload(disposeArray));
+  if (j.s) g.setAttribute('aSeed', new THREE.BufferAttribute(u8(j.s), 1).onUpload(disposeArray));
+  if (j.k) g.setAttribute('aKind', new THREE.BufferAttribute(u8(j.k), 1).onUpload(disposeArray));
   const ir = u8(j.i);
-  g.setIndex(new THREE.BufferAttribute(j.i32 ? new Uint32Array(ir.buffer) : new Uint16Array(ir.buffer), 1));
+  g.setIndex(new THREE.BufferAttribute(j.i32 ? new Uint32Array(ir.buffer) : new Uint16Array(ir.buffer), 1).onUpload(disposeArray));
   g.computeVertexNormals();
+  g.attributes.normal.onUpload(disposeArray); // M1a: free the CPU mirrors after GPU upload (no raycaster in this app)
+  g.computeBoundingSphere();                  // frustum culling needs it after the position array is freed
   return g;
 }
 // One-shot loader (used for the always-resident harbor/Manhattan landmarks).
@@ -1451,15 +1453,23 @@ function dcpWorker() {
       const d = e.data, c = DCP_PEND.get(d.id); DCP_PEND.delete(d.id);
       if (!c || c.state !== 'loading') return;          // disposed/cancelled while decoding
       if (!d.ok) { c.state = 'idle'; return; }
+      // M1a/M1b (plan-mobile-memory.md): normals arrive as normalized Int8 (12→3 B/vtx),
+      // and every attribute frees its CPU copy after GPU upload (C2b's onUpload pattern —
+      // there's no raycaster, and disposal drops the whole geometry, so the mirrors are
+      // pure waste; measured 136.8 MB resident at the M0 baseline). Bounds are computed
+      // BEFORE first render while the position array still exists.
       const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(d.pos, 3));
-      g.setAttribute('normal', new THREE.BufferAttribute(d.nor, 3));
-      g.setAttribute('color', new THREE.BufferAttribute(d.col, 3, true));
-      if (d.seed) g.setAttribute('aSeed', new THREE.BufferAttribute(d.seed, 1));
-      if (d.kind) g.setAttribute('aKind', new THREE.BufferAttribute(d.kind, 1));
-      g.setIndex(new THREE.BufferAttribute(d.idx, 1));
+      g.setAttribute('position', new THREE.BufferAttribute(d.pos, 3).onUpload(disposeArray));
+      g.setAttribute('normal', new THREE.BufferAttribute(d.nor, 3, true).onUpload(disposeArray));
+      g.setAttribute('color', new THREE.BufferAttribute(d.col, 3, true).onUpload(disposeArray));
+      if (d.seed) g.setAttribute('aSeed', new THREE.BufferAttribute(d.seed, 1).onUpload(disposeArray));
+      if (d.kind) g.setAttribute('aKind', new THREE.BufferAttribute(d.kind, 1).onUpload(disposeArray));
+      g.setIndex(new THREE.BufferAttribute(d.idx, 1).onUpload(disposeArray));
       c.mesh = new THREE.Mesh(g, c.loadingDetail === 'lod' ? DCP_MAT_LOD : DCP_MAT);
       c.detail = c.loadingDetail;
+      c.mesh.frustumCulled = false; // warm-up: draw once even offscreen so onUpload frees the CPU
+                                    // mirrors immediately (streamDcpChunks re-enables culling after)
+      g.computeBoundingSphere(); // frustum culling reads this every frame; position array is freed at upload
       if (c.proc) { g.computeBoundingBox(); const bb = g.boundingBox; c.aabb = [bb.min.x, bb.min.z, bb.max.x, bb.max.z]; }
       // M0 metrics (plan-mobile-memory.md): decode latency + this chunk's attribute bytes
       if (c._t0) { PERF_M.decodeMs.push(performance.now() - c._t0); c._t0 = 0; }
@@ -1479,6 +1489,12 @@ function loadDcpChunk(c, detail) {
 }
 let DCP_CAP = 16, DCP_KEEP = 4, DCP_LOD_CAP = 44, DCP_LOAD = 7000, DCP_LOD_RADIUS = 60000, _dcpTierSet = false;
 function streamDcpChunks() {
+  // M1a warm-up sweep: once a fresh chunk's attributes have uploaded (position array freed
+  // by onUpload), re-enable frustum culling. The vertex-only cost of drawing it offscreen
+  // lasts at most one 700 ms tick per chunk.
+  for (const c of DCP_CHUNKS)
+    if (c.state === 'loaded' && c.mesh && !c.mesh.frustumCulled && !c.mesh.geometry.attributes.position.array)
+      c.mesh.frustumCulled = true;
   if (!_dcpTierSet) { // TIER is declared later in module scope — read it lazily at first run
     // Detail is assigned by RANK (nearest first), which keeps resident geometry bounded no matter
     // how many neighborhoods exist (perf #1): the nearest DCP_CAP render FULL detail; the next

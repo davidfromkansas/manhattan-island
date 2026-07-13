@@ -39,9 +39,14 @@ self.onmessage = (e) => {
       const x = nor[i], y = nor[i + 1], z = nor[i + 2], l = Math.hypot(x, y, z) || 1;
       nor[i] = x / l; nor[i + 1] = y / l; nor[i + 2] = z / l;
     }
-    const transfer = [pos.buffer, nor.buffer, col.buffer, idx.buffer];
+    // M1b (plan-mobile-memory.md): ship normals as normalized Int8 — 12 → 3 B/vertex on
+    // the transfer AND the GPU, imperceptible on the Lambert materials (same quantization
+    // C2b shipped for the procedural city). Main thread wires normalized:true.
+    const nor8 = new Int8Array(nv * 3);
+    for (let i = 0; i < nor.length; i++) nor8[i] = Math.round(nor[i] * 127);
+    const transfer = [pos.buffer, nor8.buffer, col.buffer, idx.buffer];
     if (seed) transfer.push(seed.buffer);
     if (kind) transfer.push(kind.buffer);
-    self.postMessage({ id, ok: true, pos, nor, col, seed, kind, idx }, transfer);
+    self.postMessage({ id, ok: true, pos, nor: nor8, col, seed, kind, idx }, transfer);
   }).catch(err => self.postMessage({ id, ok: false, error: String(err && err.message || err) }));
 };
