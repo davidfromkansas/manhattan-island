@@ -365,3 +365,15 @@ byte-identically (contained blast radius — verified). Desktop: clean build, fp
 whole island instantly full. Mobile startup memory (rebuilding the full Manhattan procedural)
 is back to the pre-DCP level that C2b fixed, so it *should* fit — pending on-device confirmation.
 Boroughs stay on the box-LOD blanket (workstream H) for now.
+
+**M3+ — mobile GPU stack-up fix (2026-07-14).** Post-M1/M2 phones still crashed: the `low` tier was
+holding Manhattan TWICE on the GPU (the Option-A procedural base PLUS the 3 nearest full DCP chunks —
+in Manhattan those are the biggest meshes; the CITY_MASK hides pixels but not geometry) while decoding
+a 96-chunk LOD blanket during the startup build peak. Fixes, all `low`-tier-only (desktop identical):
+(1) proc (mn-/ues-/roosevelt) chunks never load on `low` — phones render Manhattan from the procedural
+base alone (the C2b-validated experience); the mask stays empty. (2) LOD blanket trimmed 96→40 within
+24 km. (3) Chunk streaming deferred 9 s on `low` so decode churn doesn't stack on the build peak.
+(4) M3 shipped: on a glLost/memPressure boot, caps start at HALF and restore after 5 clean minutes.
+Measured (?tier=low forced, midtown): 0 proc chunks, DCP verts 4.4M→0.43M (−90%), heap 122–158 MB,
+fps 114, procedural Manhattan fully rendered (no holes), boroughs still get 3 nearest FULL chunks
+(street-level fabric intact). `?tier=` URL override added for debugging.

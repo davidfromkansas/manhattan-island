@@ -1563,9 +1563,23 @@ function streamDcpChunks() {
     // hysteresis so a chunk at the full/LOD boundary doesn't swap-thrash. Mobile blankets the city
     // with box-LOD (nearest ~40) so there are no flat holes; the 3 nearest upgrade to full detail.
     DCP_CAP = TIER === 'low' ? 3 : TIER === 'medium' ? 6 : 16;
-    DCP_LOD_CAP = TIER === 'low' ? 96 : TIER === 'medium' ? 72 : 96;
+    DCP_LOD_CAP = TIER === 'low' ? 40 : TIER === 'medium' ? 72 : 96;
     DCP_LOAD = TIER === 'low' ? 3200 : TIER === 'medium' ? 4800 : 13000;
-    DCP_LOD_RADIUS = TIER === 'low' ? 60000 : 60000;
+    DCP_LOD_RADIUS = TIER === 'low' ? 24000 : 60000;
+    // M3 (plan-mobile-memory): pressure-adaptive budget. If the last session lost the GL
+    // context (e0b96f8 sets glLost before its recovery reload), start at HALF caps and
+    // remember via localStorage so cold starts stay conservative; a session that runs
+    // 5 minutes clean steps back up and clears the flag.
+    try {
+      const pressured = sessionStorage.getItem('glLost') || localStorage.getItem('memPressure');
+      if (pressured) {
+        localStorage.setItem('memPressure', '1');
+        DCP_CAP = Math.max(2, DCP_CAP >> 1); DCP_LOD_CAP = DCP_LOD_CAP >> 1;
+        setTimeout(() => { // 5 clean minutes → restore full budget next boot
+          localStorage.removeItem('memPressure');
+        }, 300000);
+      }
+    } catch (e) {}
     _dcpTierSet = true;
   }
   const cx = camera.position.x, cz = camera.position.z;
@@ -1575,7 +1589,8 @@ function streamDcpChunks() {
   for (let r = 0; r < scored.length; r++) {
     const { c, d } = scored[r];
     let det = null;
-    if (r < DCP_CAP && d < DCP_LOAD) det = 'full';
+    if (TIER === 'low' && c.proc) det = null;                              // phones: Manhattan = procedural base only (no double-city on the GPU)
+    else if (r < DCP_CAP && d < DCP_LOAD) det = 'full';
     else if (!c.proc && r < DCP_CAP + DCP_KEEP + DCP_LOD_CAP && d < DCP_LOD_RADIUS) det = 'lod';
     // hysteresis: keep a currently-FULL chunk full through the KEEP band so it doesn't flip to LOD on tiny moves
     if (det === 'lod' && r < DCP_CAP + DCP_KEEP && c.detail === 'full' && c.state === 'loaded') det = 'full';
@@ -2124,6 +2139,8 @@ generateCity();
 // preset instead of `high` — the #1 mobile crash/latency relief. The quality
 // dropdown still overrides. deviceMemory is Chrome-only (absent on Safari → 0).
 const TIER = (() => {
+  const forced = new URLSearchParams(location.search).get('tier');
+  if (forced === 'low' || forced === 'medium' || forced === 'high') return forced; // debug: ?tier=low simulates a phone's budget
   const coarse = matchMedia('(pointer: coarse)').matches;
   const shortEdge = Math.min(screen.width, screen.height);
   if (coarse && shortEdge < 820) return 'low';                       // phones
@@ -4060,8 +4077,10 @@ await bootStep(0.7, 'paving the boroughs…'); // §26e boot bar (yield → repa
     m.matrixAutoUpdate = false; scene.add(m);
   }
   window.__dcp = DCP_CHUNKS; // dev: streaming state
-  streamDcpChunks();                    // initial pass (loads only chunks near the start camera)
-  setInterval(streamDcpChunks, 700);    // stream as the camera moves
+  // phones: let the startup build finish + settle before any chunk decodes compete for
+  // memory (the build peak is the jetsam moment); desktop streams immediately as before.
+  const _dcpDelay = (typeof TIER !== 'undefined' && TIER === 'low') ? 9000 : 0;
+  setTimeout(() => { streamDcpChunks(); setInterval(streamDcpChunks, 700); }, _dcpDelay);
 }
 
 /* ============================================================
