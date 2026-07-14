@@ -4010,7 +4010,8 @@ await bootStep(0.7, 'paving the boroughs…'); // §26e boot bar (yield → repa
   // South-Brooklyn ground (always-resident, 40 KB): building-coverage land mesh for the
   // off-plate region — the Coney peninsula, the Atlantic beach strip (sand), and the Jamaica
   // Bay side with Sheepshead Bay / Gerritsen / Mill Basin / Paerdegat as open water.
-  fetch('bk-south-land.bin').then(r => r.arrayBuffer()).then(buf => {
+  for (const _residentBin of ['bk-south-land.bin', 'si-rail.bin'])
+  fetch(_residentBin).then(r => r.arrayBuffer()).then(buf => {
     const dv = new DataView(buf);
     if (dv.getUint32(0, true) !== 0x3143594E) return;
     const i32 = dv.getUint8(6) & 1, nv = dv.getUint32(8, true);
@@ -4031,6 +4032,17 @@ await bootStep(0.7, 'paving the boroughs…'); // §26e boot bar (yield → repa
       polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }), true);
     const gm = new THREE.Mesh(g, mat); gm.matrixAutoUpdate = false; scene.add(gm);
   }).catch(() => {});
+  { // Staten Island landmarks: St George Ferry Terminal, the ballpark, the Range Light, Snug Harbor
+    const S = Sink();
+    pushBoxG(S, -968, -7423, 1.5, 14, 130, 60, 0.42, [0.32, 0.48, 0.42], 0.4, -1, [0.26, 0.40, 0.35]); // ferry terminal (green roof)
+    pushBoxG(S, -968, -7383, 15.5, 4, 90, 18, 0.42, [0.85, 0.83, 0.78], 0.3, -1);                       // terminal clerestory
+    pushPrism(S, -1324, -7425, 1.5, 16, 62, 52, 14, 0.42, [0.42, 0.44, 0.48], 0.5, -1, [0.30, 0.42, 0.30]); // ballpark bowl (green field roof)
+    pushPrism(S, -2179, -16570, 1.5, 26, 4.5, 3.2, 8, 0, [0.88, 0.86, 0.80], 0.4, -1);                  // SI Range Light tower
+    pushBoxG(S, -2179, -16570, 27.5, 3, 5, 5, 0, [0.55, 0.20, 0.16], 0.4, -1);                          // light housing
+    for (let i = 0; i < 5; i++) pushBoxG(S, -2806 + (i - 2) * 42, -8618, 1.5, 13, 34, 20, 0.42, [0.80, 0.76, 0.68], 0.4, 0, [0.35, 0.30, 0.26]); // Snug Harbor Greek-revival row
+    const m = new THREE.Mesh(sinkToGeometry(S), patchCityMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), 0));
+    m.matrixAutoUpdate = false; scene.add(m);
+  }
   { // Bronx River ribbon: dark water overlay riding just above the plate along the real course
     const pos = [], idx = [];
     for (let i = 0; i < BX_RIVER.length; i++) {

@@ -98,6 +98,42 @@ for (la,lo,rx,rz) in landpatch:
     cx0=(g0+g1)//2; ch0=(h0+h1)//2; rx2=int((g1-g0)*0.3); rz2=int((h1-h0)*0.3)
     land[max(0,cx0-rx2):min(W,cx0+rx2), max(0,ch0-rz2):min(H,ch0+rz2)]=True
 land|=(mask & dil(dil(land)))   # building cells re-join land only if adjacent to it (keeps shore strips, drops mid-channel piers/barges)
+# ---- SURVEYED WETLANDS (NYC Open Data p48c-iqtu): Water classes -> open water; Estuarine/Emergent
+# -> marsh; Forested/Scrub-Shrub -> wooded green (joins the park/tree treatment).
+marshm=np.zeros((W,H),bool)
+try:
+    WET=json.load(open('/private/tmp/claude-501/-Users-david-lietjauw/774ad873-7b5f-4951-84dd-2365510893f4/scratchpad/nyc_wetlands.json'))['features']
+except Exception as e:
+    WET=[]; print('wetlands load failed:',e)
+from matplotlib.path import Path as MPath
+nw=0
+for ft in WET:
+    cl=ft['properties'].get('classname'); g=ft.get('geometry')
+    if not g or not cl: continue
+    polys=g['coordinates'] if g['type']=='MultiPolygon' else [g['coordinates']]
+    for poly in polys:
+        rings=[np.array([geoRaw_ll(la,lo) for lo,la in ring]) for ring in poly if len(ring)>=3]
+        if not rings: continue
+        xs=np.concatenate([r[:,0] for r in rings]); zs=np.concatenate([r[:,1] for r in rings])
+        g0=max(0,int((xs.min()-X0)//CELL)); g1=min(W,int((xs.max()-X0)//CELL)+1)
+        h0=max(0,int((zs.min()-Z0)//CELL)); h1=min(H,int((zs.max()-Z0)//CELL)+1)
+        if g0>=g1 or h0>=h1: continue
+        gxs=np.arange(g0,g1); gzs=np.arange(h0,h1)
+        PX,PZ=np.meshgrid(X0+gxs*CELL+CELL/2, Z0+gzs*CELL+CELL/2, indexing='ij')
+        pts=np.column_stack([PX.ravel(),PZ.ravel()])
+        inside=np.zeros(len(pts),bool)
+        for r in rings:
+            inside ^= MPath(r).contains_points(pts)   # even-odd across rings (holes handled)
+        inside=inside.reshape(len(gxs),len(gzs))
+        sub=(slice(g0,g1),slice(h0,h1))
+        if cl in ('Water','Water-Estuarine'):
+            land[sub]&=~inside; park[sub]&=~inside; marshm[sub]&=~inside
+        elif cl in ('Estuarine','Emergent'):
+            land[sub]|=inside; marshm[sub]|=inside
+        else:
+            land[sub]|=inside; park[sub]|=inside
+        nw+=1
+print('wetland polys rasterized:',nw,'marsh cells:',int(marshm.sum()))
 land=carve(land)
 print('land cells:',int(land.sum()),flush=True)
 # 1) bitmask json (MSB-first, bit = gx*H+gz)
@@ -144,12 +180,14 @@ for gx in range(W):
     gz=0
     while gz<H:
         if not offp[gx,gz]: gz+=1; continue
-        # sub-run: same park/non-park category
-        cat=park[gx,gz]
+        # sub-run: same (park, marsh) category
+        cat=(park[gx,gz], marshm[gx,gz])
         g2=gz
-        while g2<H and offp[gx,g2] and park[gx,g2]==cat: g2+=1
+        while g2<H and offp[gx,g2] and (park[gx,g2],marshm[gx,g2])==cat: g2+=1
         z0=Z0+gz*CELL; z1=Z0+g2*CELL
-        if cat:
+        if cat[1] and not cat[0]:
+            quad(x,x+CELL,z0,z1,tuple(int(c*255) for c in marsh)); gz=g2; continue
+        if cat[0]:
             quad(x,x+CELL,z0,z1,tuple(int(c*255) for c in (0.30,0.40,0.24)))
             for cz in range(gz,g2):   # canopy scatter (parity with the built boroughs' park trees)
                 h=(gx*2654435761 ^ cz*40503)&0xffff

@@ -6,6 +6,33 @@ the rules on adding entries.
 
 ---
 
+## 🌾 Surveyed wetlands · 🚆 Staten Island Railway · 🚢 St George landmarks
+
+**Shipped:** July 14, 2026
+
+**TL;DR:** The city's wetlands now come from the official survey instead of hand-drawn
+shapes — Jamaica Bay gets its real marsh-island archipelago — and Staten Island gains
+its railway (all 21 stations, Tottenville to St George) and a landmark set at St George.
+
+**What you'll see:** Jamaica Bay dotted with its true surveyed marsh islands (Ruffle
+Bar, Canarsie Pol, JoCo Marsh and the rest) exactly where they lie in reality; marsh
+and wooded-wetland coloring along Fresh Kills, the Bluebelt and every surveyed wetland
+citywide; the Staten Island Railway's ballast-and-twin-rail line running the length of
+the island's east shore with platforms and station houses at all 21 stops; and at
+St George the ferry terminal's green roof, the ballpark beside it, Snug Harbor's
+Greek-revival row, and the Range Light tower on the ridge.
+
+**How it works:** NYC's verified wetlands layer (Open Data `p48c-iqtu`, 6,692 polygons)
+is rasterized into the building-coverage land mask — `Water` classes carve open water,
+`Estuarine`/`Emergent` render as marsh, `Forested`/`Scrub-Shrub` join the tree-scattered
+park treatment (even-odd ring fill, vectorized). The SIR comes from the MTA subway GTFS
+(`SI` route shapes + stops) baked to a 29 KB resident mesh; landmarks are bespoke
+geometry at real coordinates. Inland lakes (Silver Lake, Wolfe's Pond) aren't in the
+wetlands dataset — a future hydrography pass. Live SIR trains (`gtfs-si` feed) are a
+clean future add.
+
+---
+
 ## ⛴️ Staten Island — the fifth borough. The city is complete.
 
 **Shipped:** July 13, 2026
