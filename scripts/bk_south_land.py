@@ -10,11 +10,11 @@ import rhino3dm, struct, json, base64, time, gc
 import numpy as np
 from georaw import sp_to_scene, geoRaw_ll
 CELL=40.0
-X0,X1,Z0,Z1=1200,22600,-11900,27200
+X0,X1,Z0,Z1=-9000,22600,-28600,27200
 W=int((X1-X0)//CELL); H=int((Z1-Z0)//CELL)
 mask=np.zeros((W,H),bool)
 t0=time.time()
-for T in ['BK10','BK11','BK12','BK13','BK14','BK15','BK16','BK17','BK18','QN08','QN09','QN10','QN11','QN12','QN13','QN14','BX01','BX03','BX04','BX05','BX06','BX07','BX08','BX09','BX10','BX11','BX12']:
+for T in ['BK10','BK11','BK12','BK13','BK14','BK15','BK16','BK17','BK18','QN08','QN09','QN10','QN11','QN12','QN13','QN14','BX01','BX03','BX04','BX05','BX06','BX07','BX08','BX09','BX10','BX11','BX12','SI01','SI02','SI03','SI_Parks']:
     m=rhino3dm.File3dm.Read(f'/Users/david_lietjauw/Downloads/NYC_3DModel_{T}.3dm')
     layers={i:l.FullPath for i,l in enumerate(m.Layers)}
     U=1.0
@@ -27,7 +27,7 @@ for T in ['BK10','BK11','BK12','BK13','BK14','BK15','BK16','BK17','BK18','QN08',
     n=0
     for o in m.Objects:
         lp=layers[o.Attributes.LayerIndex]
-        if 'oot' not in lp or not ('urface' in lp or 'Srf' in lp): continue
+        if not (('oot' in lp or 'acade' in lp) and ('urface' in lp or 'Srf' in lp)): continue  # footprints OR facades (park tiles have no footprints)
         g=o.Geometry
         try: bb=g.GetBoundingBox()
         except: continue
@@ -56,6 +56,12 @@ WATER=[  # (lat0,lon0, lat1,lon1, width_m)
  (40.7975,-73.8775, 40.8230,-73.8750, 170),   # Bronx River (lower, east-mask side)
  (40.8250,-73.8110, 40.8720,-73.8260, 220),   # Eastchester Bay / Hutchinson mouth
  (40.8720,-73.8260, 40.8870,-73.8180, 150),   # Hutchinson River (upper)
+ (40.5705,-74.1975, 40.5870,-74.1690, 130),   # Fresh Kills / Main Creek
+ (40.5640,-74.1890, 40.5800,-74.1550, 100),   # Richmond Creek
+ (40.6395,-74.0850, 40.6440,-74.1450, 350),   # Kill Van Kull (east)
+ (40.6440,-74.1450, 40.6480,-74.1900, 380),   # Kill Van Kull (west)
+ (40.5470,-74.1372, 40.5428,-74.1335, 200),   # Great Kills Harbor (lagoon)
+ (40.6230,-74.2025, 40.6450,-74.1935, 330),   # Arthur Kill (north channel)
 ]
 def carve(land):
     for la0,lo0,la1,lo1,wd in WATER:
@@ -71,11 +77,27 @@ def carve(land):
     return land
 # manual park patches (no buildings but land): Marine Park grass + Floyd Bennett Field
 park=np.zeros((W,H),bool)
-for (la,lo,rx,rz) in [(40.6015,-73.9155,600,850),(40.5885,-73.8925,750,950),(40.8680,-73.8090,1050,1450),(40.8740,-73.8290,700,950),(40.8950,-73.8670,550,650)]:  # + Pelham Bay Pk, Co-op City, Woodlawn  # Marine Park (E of Gerritsen Ck), Floyd Bennett Field
+landpatch=[(40.6215,-74.1835,560,660),(40.6120,-74.1900,420,420)]  # Bloomfield / Chelsea industrial west shore (tan, no trees)
+near=mask.copy()
+for _ in range(25): near=dil(near)   # within ~1 km of any real building
+for (la,lo,rx,rz) in [(40.6015,-73.9155,600,850),(40.5885,-73.8925,750,950),(40.8680,-73.8090,1050,1450),(40.8740,-73.8290,700,950),(40.8950,-73.8670,550,650),(40.5770,-74.1830,1250,1500),(40.5890,-74.1370,850,1000),(40.6030,-74.1580,550,650),(40.6225,-74.1120,380,520),(40.5680,-74.0960,480,420),(40.5390,-74.1302,260,380),(40.5510,-74.1210,420,620),(40.5000,-74.2495,320,380),(40.5390,-74.2330,460,560),(40.5180,-74.1880,380,450),(40.5060,-74.2170,480,380),(40.6250,-74.0910,320,420),(40.6050,-74.1050,520,620)]:  # + Pelham Bay/Co-op/Woodlawn + SI: Fresh Kills, Greenbelt, Willowbrook, Clove Lks, Miller Fld, Great Kills Pk, Wolfe's Pond, Mt Loretto, Silver Lk  # Marine Park (E of Gerritsen Ck), Floyd Bennett Field
     px,pz=geoRaw_ll(la,lo)
     g0=int((px-rx-X0)//CELL); g1=int((px+rx-X0)//CELL); h0=int((pz-rz-Z0)//CELL); h1=int((pz+rz-Z0)//CELL)
-    land[max(0,g0):min(W,g1), max(0,h0):min(H,h1)]=True
-    park[max(0,g0):min(W,g1), max(0,h0):min(H,h1)]=True
+    sl=(slice(max(0,g0),min(W,g1)), slice(max(0,h0),min(H,h1)))
+    land[sl]|=near[sl]
+    park[sl]|=near[sl]
+    # inner 60% core is unconditional land (big forests sit >1km from any building)
+    cx0=(g0+g1)//2; ch0=(h0+h1)//2; rx2=int((g1-g0)*0.3); rz2=int((h1-h0)*0.3)
+    sc=(slice(max(0,cx0-rx2),min(W,cx0+rx2)), slice(max(0,ch0-rz2),min(H,ch0+rz2)))
+    land[sc]=True; park[sc]=True
+for (la,lo,rx,rz) in landpatch:
+    px,pz=geoRaw_ll(la,lo)
+    g0=int((px-rx-X0)//CELL); g1=int((px+rx-X0)//CELL); h0=int((pz-rz-Z0)//CELL); h1=int((pz+rz-Z0)//CELL)
+    sl=(slice(max(0,g0),min(W,g1)), slice(max(0,h0),min(H,h1)))
+    land[sl]|=near[sl]
+    cx0=(g0+g1)//2; ch0=(h0+h1)//2; rx2=int((g1-g0)*0.3); rz2=int((h1-h0)*0.3)
+    land[max(0,cx0-rx2):min(W,cx0+rx2), max(0,ch0-rz2):min(H,ch0+rz2)]=True
+land|=(mask & dil(dil(land)))   # building cells re-join land only if adjacent to it (keeps shore strips, drops mid-channel piers/barges)
 land=carve(land)
 print('land cells:',int(land.sum()),flush=True)
 # 1) bitmask json (MSB-first, bit = gx*H+gz)
@@ -97,29 +119,48 @@ for gx in range(W):
     x=X0+gx*CELL
     for gz in range(H):
         z=Z0+gz*CELL
-        if not (z< -8480 or x>8780 or (z>15400 and x>4900)): offp[gx,gz]=False; continue
+        if not (z< -8480 or x>8780 or (z>15400 and x>4900) or (x<1200 and z<-7000)): offp[gx,gz]=False; continue
         if JFK[0]<x<JFK[1] and JFK[2]<z<JFK[3]: offp[gx,gz]=False; continue
         for cx0,cz0,rr in OLDPLATES:
             if (x-cx0)**2+(z-cz0)**2 < rr*rr: offp[gx,gz]=False; break
 # beach: southernmost land run edge (Coney/Manhattan Beach) → sand for the 2 cells bordering south water, z<-9300
 V=[];F=[];C=[]
+def bcell(cx,cz,w,h,col):
+    b=len(V); hw=w/2
+    for (dx,dz,y) in [(-hw,-hw,1.2),(hw,-hw,1.2),(hw,hw,1.2),(-hw,hw,1.2),(-hw,-hw,h),(hw,-hw,h),(hw,hw,h),(-hw,hw,h)]:
+        V.append((cx+dx,y,cz+dz)); C.append(col)
+    for f in [(0,2,1),(0,3,2),(4,5,6),(4,6,7),(0,1,5),(0,5,4),(1,2,6),(1,6,5),(2,3,7),(2,7,6),(3,0,4),(3,4,7)]:
+        F.append((b+f[0],b+f[1],b+f[2]))
 def quad(x0,x1,z0,z1,col):
     b=len(V)
     for (x,z) in [(x0,z0),(x1,z0),(x1,z1),(x0,z1)]: V.append((x,1.12,z)); C.append(col)
     F.append((b,b+2,b+1)); F.append((b,b+3,b+2))
+def catof(gx,gz,z0):
+    if park[gx,gz]: return 'park'
+    rockawayOcean = (X0+gx*CELL)>11000 and z0< -2000 and (X0+gx*CELL)<22600
+    return 'base'
 for gx in range(W):
     x=X0+gx*CELL
     gz=0
     while gz<H:
         if not offp[gx,gz]: gz+=1; continue
+        # sub-run: same park/non-park category
+        cat=park[gx,gz]
         g2=gz
-        while g2<H and offp[gx,g2]: g2+=1
+        while g2<H and offp[gx,g2] and park[gx,g2]==cat: g2+=1
         z0=Z0+gz*CELL; z1=Z0+g2*CELL
-        # sand band: bottom 2 cells of a run that starts below -9300 (faces south water)
-        pk=park[gx,(gz)] if gz<H else False
-        if pk:
+        if cat:
             quad(x,x+CELL,z0,z1,tuple(int(c*255) for c in (0.30,0.40,0.24)))
-        elif z0< -9300 or (x>11000 and z0< -2000 and x<22600):
+            for cz in range(gz,g2):   # canopy scatter (parity with the built boroughs' park trees)
+                h=(gx*2654435761 ^ cz*40503)&0xffff
+                if h%100<38:
+                    tx=x+ (h%37)/37*CELL; tz=Z0+cz*CELL+((h>>6)%41)/41*CELL
+                    th=4.5+(h%23)/23*5.5; tw=3.2+(h%13)/13*2.8
+                    gcol=(int(255*(0.16+(h%17)/17*0.10)),int(255*(0.30+(h%19)/19*0.14)),int(255*(0.12+(h%11)/11*0.08)))
+                    bcell(tx,tz,tw,th,gcol)
+            gz=g2; continue
+        # sand band: bottom 2 cells of a run that starts below -9300 (faces south water)
+        if z0< -9300 or (x>11000 and z0< -2000 and x<22600):
             zs=min(z1,z0+2*CELL)
             quad(x,x+CELL,z0,zs,tuple(int(c*255) for c in sand))
             if zs<z1: quad(x,x+CELL,zs,z1,tuple(int(c*255) for c in (marsh if x>9300 and z0>-8000 else gc_col)))

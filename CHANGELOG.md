@@ -6,6 +6,40 @@ the rules on adding entries.
 
 ---
 
+## ⛴️ Staten Island — the fifth borough. The city is complete.
+
+**Shipped:** July 13, 2026
+
+**TL;DR:** Staten Island now renders real DCP building massing end to end — St George,
+Stapleton, New Brighton, West Brighton, Port Richmond, Mariners Harbor, Todt Hill,
+New Dorp, Midland Beach, Travis, Bulls Head, New Springville, Great Kills, Eltingville,
+Annadale, Huguenot, Rossville, Arden Heights, Charleston, Prince's Bay, Pleasant Plains
+and Tottenville — with its real street network, a coastline verified point-by-point
+against the real map, and its three New Jersey crossings. All five boroughs are done.
+
+**What you'll see:** the whole island populated with real fabric and its actual streets
+(Hylan Blvd, the expressway corridors, the curving subdivisions) with live traffic on
+them; the Verrazzano-Narrows landing at Fort Wadsworth, plus the Bayonne Bridge,
+Goethals Bridge and Outerbridge Crossing heading for Jersey; the Greenbelt, Fresh
+Kills, La Tourette and the shore parks as tree-scattered green (Pelham Bay, Marine
+Park and Floyd Bennett got trees too); Great Kills Harbor with its enclosing spit;
+the Kill Van Kull, Arthur Kill and Raritan Bay as open water; and Staten Islanders —
+census-real residents — walking the island for the first time.
+
+**How it works:** DCP tiles **SI01, SI02, SI03 + parks** baked to 9 streamed chunks
+(~2.6M tris). Finding SI03 took detective work: DCP's own download link is misspelled
+(`siI03.zip`), recovered via the Wayback Machine. The island sits off every existing
+ground system, so the building-coverage land mask owns all of it (now ~28.6 km
+north–south, five boroughs in one asset); a 21-point paired audit against real-map
+coordinates (land-just-inside vs water-just-offshore) passes 21/21 after fixing
+Crooke's Point, Conference House Park, Clay Pit Ponds, Bloomfield and pier-noise in
+the Arthur Kill. The street graph gained all 16,714 Staten Island CSCL segments
+(borough 5 was never baked), which also unlocks intersection geocoding for the City
+Concierge agent and vehicle traffic on the island. Streaming/memory model unchanged:
+127 chunks total, resident still rank-bounded.
+
+---
+
 ## 🌉 The Bronx complete: real massing borough-wide, a real Bronx River, and a real east coast
 
 **Shipped:** July 13, 2026

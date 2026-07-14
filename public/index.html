@@ -2620,8 +2620,8 @@ function landOK(x, z) {
   if (bayContains(x, z)) return false;
   { const qw = qwShoreX(z); if (qw !== null && x < qw && !riIslContains(x, z)) return false; } // East Channel is water (real DCP bank)
   if (typeof inQnEast === 'function' && inQnEast(x, z)) return true;   // eastern Queens real-fabric land (CD6/CD7 + Glendale)
-  if (typeof inBkSouth === 'function' && BK_SOUTH && (z < -8480 || x > 8780 || (z > 15400 && x > 4900) || z > 24200) && x > 1200 && z < 27200 && z > -11900 && x < 22600)
-    return inBkSouth(x, z);                                           // south BK + SE Queens + Rockaways + east/north Bronx: building-coverage mask is authoritative (bays/creeks = water)
+  if (typeof inBkSouth === 'function' && BK_SOUTH && (z < -8480 || x > 8780 || (z > 15400 && x > 4900) || z > 24200 || (x < 1200 && z < -7000)) && x > -9000 && z < 27200 && z > -28600 && x < 22600)
+    return inBkSouth(x, z);                                           // south BK + SE Queens + Rockaways + east/north Bronx + STATEN ISLAND: building-coverage mask is authoritative
   if (z > 12800 && z < 21500) { // Harlem corridor: keep east of the visual channel
     const ee = Math.max(bxShoreX(z) ?? -1e9, coastAt(Math.min(z, 21000)).e + 40) + 12;
     if (x < ee) return false;
@@ -3975,6 +3975,17 @@ await bootStep(0.7, 'paving the boroughs…'); // §26e boot bar (yield → repa
   registerDcpChunk('bx-riverdale.json', -1244, 23283, 2260);      // Riverdale / Fieldston / Kingsbridge / Spuyten Duyvil / Marble Hill
   registerDcpChunk('bx-parks.json', 3370, 22783, 5391);           // Van Cortlandt / Bronx Park / Pelham Bay Park structures
 
+  // Staten Island (SI01/02 + parks) — the fifth borough; all ground from the coverage mask
+  registerDcpChunk('si-northshore.json', -1104, -9133, 3305);     // St George / Stapleton / New Brighton / West Brighton / Silver Lake
+  registerDcpChunk('si-westshore.json', -5450, -10721, 2051);     // Port Richmond / Mariners Harbor / Arlington
+  registerDcpChunk('si-midisland-e.json', -876, -12664, 3375);    // Todt Hill / Dongan Hills / Midland Beach / New Dorp
+  registerDcpChunk('si-midisland-w.json', -6111, -13585, 2902);   // Travis / Chelsea / Bulls Head / New Springville
+  registerDcpChunk('si-southeast.json', -1156, -16209, 3298);     // New Dorp / Oakwood / Great Kills N
+  registerDcpChunk('si-rossville.json', -5410, -16911, 2291);     // Rossville / Arden Heights / Woodrow
+  registerDcpChunk('si-southshore.json', -2147, -22589, 3879);    // Great Kills S / Eltingville / Annadale / Huguenot / Bay Terrace
+  registerDcpChunk('si-tottenville.json', -5579, -23735, 4864);   // Tottenville / Prince's Bay / Pleasant Plains / Charleston
+  registerDcpChunk('si-parks.json', 897, -15044, 5007);           // SI park structures (Greenbelt / Gateway / beaches)
+
   // Manhattan — real DCP massing, Battery Park City → Inwood + Randalls/Wards + Central Park
   registerDcpChunk('mn-battery-bpc.json', 86, 1502, 809);            // Battery Park City / South St Seaport
   registerDcpChunk('mn-tribeca-seaport.json', 524, 2240, 1283);      // Tribeca / Civic Center / Two Bridges
@@ -4564,7 +4575,10 @@ buildBridge({ ax: 707, az: 2726, bx: 2107, bz: 1419, t1: 0.35, t2: 0.65, towerH:
 buildBridge({ ax: 1457, az: 3171, bx: 3297, bz: 3208, t1: 0.35, t2: 0.65, towerH: 96, deckY: 40, deckW: 21, col: [0.48, 0.50, 0.52], style: 'steel', extA: 50, extB: 50 });                 // Williamsburg Br — tower-line anchors (nearly due east)
 buildBridge({ ax: 801, az: 8186, bx: 2711, bz: 8197, t1: 0.30, t2: 0.55, towerH: 106, deckY: 42, deckW: 20, col: [0.60, 0.58, 0.52], style: 'truss', detail: true, extA: 60, extB: 60 });   // Ed Koch Queensboro (real: 2 Av → Queens Plaza)
 buildBridge({ ax: -1278, az: 17493, bx: -2330, bz: 17250, t1: 0.20, t2: 0.62, towerH: 184, deckY: 65, deckW: 26, col: [0.55, 0.57, 0.60], style: 'steel', extA: 80, extB: 160 });           // George Washington Br
-buildBridge({ ax: 3174, az: -8889, bx: 2500, bz: -9950, t1: 0.28, t2: 0.72, towerH: 205, deckY: 62, deckW: 28, col: [0.52, 0.54, 0.58], style: 'steel', extA: 120, extB: 120 });            // Verrazzano-Narrows
+buildBridge({ ax: -4942, az: -10914, bx: -5838, bz: -9488, t1: 0.32, t2: 0.68, towerH: 82, deckY: 48, deckW: 16, col: [0.55, 0.57, 0.60], style: 'truss', extA: 80, extB: 80 });           // Bayonne Bridge (Kill Van Kull arch, to NJ)
+buildBridge({ ax: -8174, az: -13159, bx: -9810, bz: -13639, t1: 0.30, t2: 0.70, towerH: 88, deckY: 42, deckW: 18, col: [0.72, 0.74, 0.78], style: 'steel', extA: 90, extB: 90 });          // Goethals Bridge (cable-stayed, to Elizabeth NJ)
+buildBridge({ ax: -6116, az: -25331, bx: -7320, bz: -26534, t1: 0.32, t2: 0.68, towerH: 46, deckY: 40, deckW: 15, col: [0.50, 0.52, 0.55], style: 'truss', extA: 70, extB: 70 });          // Outerbridge Crossing (to Perth Amboy NJ)
+buildBridge({ ax: 3449, az: -9130, bx: 2052, bz: -10706, t1: 0.28, t2: 0.72, towerH: 205, deckY: 62, deckW: 28, col: [0.52, 0.54, 0.58], style: 'steel', extA: 140, extB: 160 });          // Verrazzano-Narrows — through the real tower line, SI end landing at Fort Wadsworth
 // RFK/Triborough: three legs meeting on Randalls Island
 buildBridge({ ax: 3027, az: 11051, bx: 2160, bz: 12250, t1: 0.30, t2: 0.70, towerH: 92, deckY: 42, deckW: 18, col: [0.42, 0.46, 0.52], style: 'steel', extA: 60, extB: 40 });               // RFK Queens leg (Hell Gate channel)
 buildBridge({ ax: coastAt(13400).e - 55, az: 13419, bx: 1900, bz: 13280, t1: 0.30, t2: 0.70, towerH: 48, deckY: 30, deckW: 16, col: [0.42, 0.46, 0.52], style: 'steel', extA: 50, extB: 40 }); // RFK Manhattan leg (channel-fitted west end)
