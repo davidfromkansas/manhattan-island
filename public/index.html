@@ -447,59 +447,6 @@
     font:10px system-ui; cursor:pointer; line-height:18px; text-align:center; padding:0;
   }
   body.photo #personaCard { display:none !important; }
-  /* §26f HOME — sign in, set your address, the city opens at your block */
-  #homeBtn { /* desktop pill under the logo, rides #brand exactly like #fbBtn */
-    display:none; width:max-content; margin:6px auto 0; pointer-events:auto; cursor:pointer;
-    font:600 11px/1.2 system-ui, -apple-system, sans-serif; color:rgba(255,255,255,.92); text-decoration:none;
-    background:rgba(10,13,20,.55); border:1px solid rgba(255,255,255,.15); border-radius:10px; padding:5px 11px;
-    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
-  }
-  #homeBtn:hover { background:rgba(25,45,70,.78); border-color:rgba(140,190,255,.4); }
-  #homeModal {
-    display:none; position:fixed; inset:0; z-index:60; background:rgba(4,7,12,.55);
-    backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
-  }
-  #homeModal .hm {
-    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:min(320px, 86vw); font:12px/1.55 system-ui,-apple-system,sans-serif; color:rgba(255,255,255,.9);
-    background:rgba(10,13,20,.92); border:1px solid rgba(140,190,255,.25); border-radius:14px; padding:16px 18px;
-  }
-  #homeModal .hhead { font-size:15px; font-weight:700; color:#f4d9b0; margin-bottom:6px; padding-right:22px; }
-  #homeModal .hsub { color:rgba(255,255,255,.6); font-size:11px; }
-  #homeModal input {
-    width:100%; box-sizing:border-box; margin:10px 0 4px; padding:8px 10px; font:13px system-ui;
-    color:#fff; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.2); border-radius:8px; outline:none;
-  }
-  #homeModal .hbtn {
-    display:inline-block; margin:8px 6px 0 0; padding:7px 13px; font:600 11px system-ui; cursor:pointer;
-    color:#fff; background:rgba(46,88,148,.55); border:1px solid rgba(140,190,255,.35); border-radius:9px;
-  }
-  #homeModal .hbtn:hover { background:rgba(60,110,180,.7); }
-  #homeModal .hbtn.dim { background:rgba(255,255,255,.07); border-color:rgba(255,255,255,.18); color:rgba(255,255,255,.65); }
-  #homeModal .hbtn.warn { background:rgba(148,46,46,.4); border-color:rgba(255,140,140,.3); }
-  #homeModal .hstat { margin-top:8px; font-size:11px; color:#e8a558; min-height:14px; }
-  #homeModal .x { position:absolute; top:9px; right:9px; width:20px; height:20px; border-radius:50%;
-    background:rgba(255,255,255,.08); color:rgba(255,255,255,.8); border:1px solid rgba(255,255,255,.2);
-    font:10px system-ui; cursor:pointer; line-height:18px; text-align:center; padding:0; }
-  #gsiBtn { margin:12px 0 4px; min-height:44px; }
-  #homePanel { /* the resident dashboard: nearest live info, computed from feeds already polling */
-    display:none; position:fixed; left:14px; bottom:118px; z-index:29; width:min(242px, 70vw);
-    font:11px/1.5 system-ui,-apple-system,sans-serif; color:rgba(255,255,255,.9);
-    background:rgba(10,13,20,.72); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
-    border:1px solid rgba(232,165,88,.3); border-radius:12px; padding:11px 13px;
-  }
-  #homePanel .phead { font-size:13px; font-weight:700; margin-bottom:5px; padding-right:52px; color:#f4d9b0; }
-  #homePanel .hrow { margin:3px 0; }
-  #homePanel .hrow .ic { display:inline-block; width:17px; }
-  #homePanel .sub { color:rgba(255,255,255,.55); }
-  #homePanel .pfoot { margin-top:7px; padding-top:6px; border-top:1px solid rgba(255,255,255,.1); color:rgba(255,255,255,.55); font-size:10px; }
-  #homePanel .x, #homePanel .gear { position:absolute; top:7px; width:20px; height:20px; border-radius:50%;
-    background:rgba(255,255,255,.08); color:rgba(255,255,255,.8); border:1px solid rgba(255,255,255,.2);
-    font:10px system-ui; cursor:pointer; line-height:18px; text-align:center; padding:0; }
-  #homePanel .x { right:7px; } #homePanel .gear { right:31px; }
-  body.photo #homePanel, body.photo #homeBtn, body.photo #homeChip { display:none !important; }
-  body.focusmode #homePanel { display:none !important; }
-  @media (max-width:700px) { #homePanel { bottom:196px; left:8px; } } /* clear the GBA cluster */
   #pcAv { /* §25u: turntable voxel portrait floating to the card's right */
     display:none; position:absolute; right:-124px; top:50%; transform:translateY(-50%);
     width:110px; height:145px; border-radius:12px;
@@ -853,26 +800,11 @@
 </div>
 <div id="vitals"></div>
 <div id="brand"><img src="nycsim-logo.png" alt="nycsim.com">
-  <a id="homeBtn" role="button" aria-label="your home">Home</a><!-- §26f: shown only when /api/home says enabled -->
   <a id="fbBtn" href="mailto:david.lietjauw@gmail.com?subject=Feedback%20for%20NYC%20SIMS">Feedback</a>
 </div>
 <a id="credit" href="https://www.linkedin.com/in/davidfromkansas/" target="_blank" rel="noopener noreferrer">Made by David Lietjauw</a>
 <div id="ticker"><div class="tkin"></div></div>
 <div id="thoughtTicker"><div class="tkin"></div></div>
-<div id="homeModal"><div class="hm"><!-- §26f sign-in / address / manage — steps rendered into #hmBody -->
-  <button class="x" id="hmX" aria-label="close">✕</button>
-  <div class="hhead" id="hmTitle">Make NYC Sim yours</div>
-  <div id="hmBody"></div>
-  <div class="hstat" id="hmStat"></div>
-</div></div>
-<div id="homePanel"><!-- §26f resident dashboard -->
-  <button class="gear" id="hpGear" title="manage home">⚙</button>
-  <button class="x" id="hpX" aria-label="close">✕</button>
-  <div class="phead" id="hpHead">🏠 Home</div>
-  <div id="hpBody"></div>
-  <div class="pfoot" id="hpFoot"></div>
-</div>
-<div id="homeChip" class="fybl"><b>🏠 Home</b></div><!-- beacon label; .fybl needs explicit display -->
 <div id="rotDial"><!-- rotation module: orbit left/right, tilt over/under -->
   <svg viewBox="0 0 120 120">
     <circle cx="60" cy="60" r="58" fill="url(#cdM)"/>
@@ -6081,10 +6013,7 @@ await bootStep(0.93, 'waking the city…'); // §26e boot bar: scene built, live
       for (const t of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(t, () => b.classList.remove('pressed'));
       b.addEventListener('click', act);
     };
-    // §26f: HOME replaced RESET (user decision 2026-07-14). Until /api/home confirms the
-    // feature is configured (homeui sets __home.ready + swaps the label), fall back to
-    // the legacy reload-reset so unconfigured deployments behave exactly as before.
-    wire('gbaReset', () => (window.__home && window.__home.ready) ? window.__home.act() : location.reload());
+    wire('gbaReset', () => location.reload());
     wire('gbaFeedback', () => { location.href = 'mailto:david.lietjauw@gmail.com?subject=Feedback%20for%20NYC%20SIMS'; });
   }
 
@@ -10946,248 +10875,6 @@ window.__perfRoute = () => new Promise((res) => {
   };
   step();
 });
-/* ============================================================
-   26f. HOME — sign in with Google, set your address once, and the city
-   opens at your block every visit (plan-home.md Phase 1). Server:
-   /api/home (lib/home-core.js). The street address is geocoded
-   server-side and DISCARDED — only coordinates (encrypted at rest) and
-   the neighborhood label come back. Unconfigured or signed-out →
-   zero behavior change (the GBA button stays RESET via §26e's
-   __home.ready indirection; the desktop pill stays hidden).
-   ============================================================ */
-const homeui = (() => {
-  const S = { on: false, clientId: null, signedIn: false, name: null, home: null,
-              hx: 0, hz: 0, cand: null, gsiInit: false, pendingFly: false, stations: null, panelT: -99 };
-  const $ = (id) => document.getElementById(id);
-  const modal = $('homeModal'), panel = $('homePanel'), chip = $('homeChip');
-  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const post = (body) => fetch('/api/home', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body) }).then(r => r.json()).catch(() => ({ error: 'network hiccup — try again' }));
-  const stat = (m) => { $('hmStat').textContent = m || ''; };
-
-  // ---- beacon: voxel cottage at street level + a soft light column that reads
-  // through the massing (depthTest:false, cams-marker trick). +2 calls, only when set.
-  let beacon = null;
-  function placeBeacon() {
-    const w = subway.geoRaw(S.home.lat, S.home.lon); // Iron Rule 1: the calibrated bridge, never geoToWorld
-    S.hx = w.x; S.hz = w.z;
-    if (!landOK(S.hx, S.hz)) console.warn('[home] beacon landOK=false — calibration guard tripped', S.hx | 0, S.hz | 0);
-    if (beacon) { beacon.position.set(S.hx, 0, S.hz); return; }
-    const parts = [];
-    const box = (bw, bh, bd, x, y, z, c) => {
-      const g = new THREE.BoxGeometry(bw, bh, bd).translate(x, y, z);
-      const n = g.attributes.position.count, col = new Float32Array(n * 3);
-      for (let i = 0; i < n; i++) { col[i * 3] = c[0]; col[i * 3 + 1] = c[1]; col[i * 3 + 2] = c[2]; }
-      g.setAttribute('color', new THREE.BufferAttribute(col, 3)); parts.push(g);
-    };
-    box(15, 11, 13, 0, 5.5, 0, [0.93, 0.88, 0.78]);   // walls — cream
-    box(17, 4.5, 15, 0, 13.2, 0, [0.62, 0.30, 0.24]); // roof slabs — brick red
-    box(12, 3.5, 11, 0, 16.6, 0, [0.62, 0.30, 0.24]);
-    box(3.6, 6, 1, 0, 3, 6.6, [0.30, 0.22, 0.16]);    // door
-    box(2.4, 5.5, 2.4, 4.6, 17, 2.6, [0.55, 0.55, 0.58]); // chimney
-    const house = new THREE.Mesh(BufferGeometryUtils.mergeGeometries(parts),
-      new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x9aa4b8, emissiveIntensity: 0.14 })); // persona pastel standard
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 240, 10, 1, true).translate(0, 120, 0),
-      new THREE.MeshBasicMaterial({ color: 0xf4c87a, transparent: true, opacity: 0.16,
-        blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, side: THREE.DoubleSide }));
-    beam.renderOrder = 8; // over the massing so home is findable from tour altitude
-    beacon = new THREE.Group(); beacon.add(house, beam);
-    beacon.position.set(S.hx, 0, S.hz);
-    scene.add(beacon);
-  }
-
-  function flyHome(openAfter) {
-    camTween = { p0: camera.position.clone(), t0: controls.target.clone(),
-      p1: new THREE.Vector3(S.hx + 170, 230, S.hz - 300), t1: new THREE.Vector3(S.hx, 12, S.hz), t: 0, dur: 2.6 };
-    setFocus('home', 'Home — ' + (S.home.neighborhood || S.home.borough || 'NYC'),
-      { neighborhood: S.home.neighborhood, borough: S.home.borough });
-    if (openAfter !== false) openPanel();
-  }
-
-  // ---- resident dashboard: nearest-X over feeds ALREADY polling — zero new upstream load
-  const d2 = (x, z) => Math.hypot(x - S.hx, z - S.hz);
-  function ensureStations() { // one 24h-cached fetch; rows → scene coords via the calibrated bridge
-    if (S.stations) return Promise.resolve(S.stations);
-    return fetch('/api/subway/stations').then(r => r.json()).then(j => {
-      S.stations = (j.rows || []).map(r => {
-        const lat = +r.gtfs_latitude, lon = +r.gtfs_longitude;
-        if (!isFinite(lat) || !isFinite(lon)) return null;
-        const w = subway.geoRaw(lat, lon);
-        return { name: r.stop_name, routes: (r.daytime_routes || '').trim(), x: w.x, z: w.z };
-      }).filter(Boolean);
-      return S.stations;
-    }).catch(() => null);
-  }
-  function renderPanel() {
-    const rows = [];
-    const nowS = HIST.active ? HIST.epochS : Date.now() / 1000; // replay freezes the clock — ETAs stay honest vs epochS
-    if (S.stations) { // nearest 2 subway stations ≤900 m + next arrivals from live trip stop-times
-      const near = S.stations.map(s => ({ s, d: d2(s.x, s.z) })).sort((a, b) => a.d - b.d).slice(0, 2).filter(o => o.d < 900);
-      for (const { s, d } of near) {
-        const arr = [];
-        for (const tr of subway.trips.values()) {
-          for (const st of tr.stops) if (st.name === s.name && st.arr > nowS - 20) {
-            arr.push({ m: Math.max(0, Math.round((st.arr - nowS) / 60)), r: tr.route, dir: tr.dir }); break;
-          }
-        }
-        arr.sort((a, b) => a.m - b.m);
-        const eta = arr.slice(0, 3).map(a => a.r + ' ' + (a.m === 0 ? 'now' : a.m + ' min')).join(' · ');
-        rows.push('<div class="hrow"><span class="ic">🚇</span><b>' + esc(s.name) + '</b> <span class="sub">' + Math.round(d) + ' m' +
-          (s.routes ? ' · ' + esc(s.routes) : '') + '</span>' +
-          (eta ? '<br><span style="margin-left:17px">' + esc(eta) + '</span>' : '') + '</div>');
-      }
-    }
-    let bs = null, bd = 1e9; // nearest Citi Bike dock ≤600 m
-    for (const st of citibike.stations) { const d = d2(st.x, st.z); if (d < bd) { bd = d; bs = st; } }
-    if (bs && bd < 600) rows.push('<div class="hrow"><span class="ic">🚲</span><b>' + esc(bs.name) + '</b> <span class="sub">' +
-      Math.round(bd) + ' m</span><br><span style="margin-left:17px">' + ((bs.bikes || 0) + (bs.ebikes || 0)) + ' bikes (' +
-      (bs.ebikes || 0) + '⚡) · ' + (bs.docks || 0) + ' docks free</span></div>');
-    const seen = new Set(), bl = []; // bus routes observed within ~400 m this poll
-    for (const v of buses.list) { const p = v.pos || v; if (!isFinite(p.x)) continue;
-      if (d2(p.x, p.z) < 400 && v.route && !seen.has(v.route)) { seen.add(v.route); bl.push(v.route); } }
-    if (bl.length) rows.push('<div class="hrow"><span class="ic">🚌</span>passing now: <b>' + esc(bl.slice(0, 5).join(', ')) + '</b></div>');
-    let fv = null, fd = 1e9; // nearest ferry ≤1.5 km
-    for (const v of ferries.list) { const p = v.pos || v; if (!isFinite(p.x)) continue;
-      const d = d2(p.x, p.z); if (d < fd) { fd = d; fv = v; } }
-    if (fv && fd < 1500) rows.push('<div class="hrow"><span class="ic">⛴️</span><b>' + esc(fv.label || 'ferry') + '</b> <span class="sub">' +
-      Math.round(fd) + ' m' + (fv.next ? ' · next ' + esc(fv.next) + (isFinite(fv.eta) ? ' (' + fv.eta + ' min)' : '') : '') + '</span></div>');
-    $('hpHead').textContent = '🏠 ' + (S.name ? S.name + '’s home' : 'Home');
-    $('hpBody').innerHTML = rows.join('') || '<span class="sub">the city is still loading its feeds…</span>';
-    $('hpFoot').textContent = HIST.active ? 'replaying ' + HIST.day + ' — not live' :
-      [S.home.neighborhood, S.home.borough].filter(Boolean).join(' · ');
-  }
-  function openPanel() { panel.style.display = 'block'; S.panelT = -99; ensureStations().then(() => { if (panel.style.display === 'block') renderPanel(); }); renderPanel(); }
-
-  // ---- sign-in modal (steps rendered into #hmBody) ----
-  function closeModal() { modal.style.display = 'none'; stat(''); }
-  function openModal(step) {
-    modal.style.display = 'block'; stat('');
-    const B = $('hmBody'), T2 = $('hmTitle');
-    if (step === 'auth') {
-      T2.textContent = 'Make NYC Sim yours';
-      B.innerHTML = '<div class="hsub">Sign in, tell the city where home is, and every visit opens at your block — ' +
-        'with your trains, bikes and ferries at a glance.</div><div id="gsiBtn"></div>' +
-        '<div class="hsub">Your address is turned into a map point and discarded — never stored. ' +
-        'Your email stays private (only used if we reach out about feedback).</div>';
-      loadGsi();
-    } else if (step === 'addr') {
-      T2.textContent = S.home ? 'Change your home' : 'Where’s home?';
-      B.innerHTML = '<input id="hmAddr" type="text" autocomplete="street-address" placeholder="e.g. 350 5th Ave, Manhattan">' +
-        '<div class="hsub">Turned into a map point, then discarded — the address itself is never stored.</div>' +
-        '<button class="hbtn" id="hmSet">Find it</button>';
-      const inp = $('hmAddr');
-      inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') $('hmSet').click(); }); // global 0-6/H/P/L keys bind unconditionally
-      $('hmSet').addEventListener('click', async () => {
-        const v = inp.value.trim(); if (v.length < 4) return stat('type a street address');
-        stat('looking it up…');
-        const j = await post({ action: 'set', address: v });
-        if (j.error) return stat(j.error);
-        S.cand = j.candidate;
-        camTween = { p0: camera.position.clone(), t0: controls.target.clone(), // pre-fly so the user can eyeball the block
-          p1: new THREE.Vector3(subway.geoRaw(S.cand.lat, S.cand.lon).x + 170, 230, subway.geoRaw(S.cand.lat, S.cand.lon).z - 300),
-          t1: new THREE.Vector3(subway.geoRaw(S.cand.lat, S.cand.lon).x, 12, subway.geoRaw(S.cand.lat, S.cand.lon).z), t: 0, dur: 2.2 };
-        openModal('confirm');
-      });
-      setTimeout(() => inp.focus(), 50);
-    } else if (step === 'confirm') {
-      T2.textContent = 'Is this your building?';
-      B.innerHTML = '<div><b>' + esc(S.cand.address) + '</b><br><span class="hsub">' +
-        esc([S.cand.neighborhood, S.cand.borough].filter(Boolean).join(' · ')) + ' — the camera is flying there now.</span></div>' +
-        '<button class="hbtn" id="hmYes">Yes, that’s home</button><button class="hbtn dim" id="hmBack">Try again</button>';
-      $('hmYes').addEventListener('click', async () => {
-        stat('saving…');
-        const j = await post({ action: 'confirm', lat: S.cand.lat, lon: S.cand.lon });
-        if (j.error) return stat(j.error);
-        S.home = j.home; placeBeacon(); closeModal(); flyHome();
-      });
-      $('hmBack').addEventListener('click', () => openModal('addr'));
-    } else if (step === 'hub') {
-      T2.textContent = 'Welcome back' + (S.name ? ', ' + S.name : '');
-      B.innerHTML = '<div class="hsub">Home: ' + esc([S.home && S.home.neighborhood, S.home && S.home.borough].filter(Boolean).join(' · ') || 'not set yet') + '</div>' +
-        (S.home ? '<button class="hbtn" id="hmFly">Fly home</button>' : '') +
-        '<button class="hbtn" id="hmChg">' + (S.home ? 'Change address' : 'Set your address') + '</button>' +
-        '<button class="hbtn dim" id="hmOut">Sign out</button>' +
-        '<button class="hbtn warn" id="hmDel">Delete my data</button>';
-      if (S.home) $('hmFly').addEventListener('click', () => { closeModal(); flyHome(); });
-      $('hmChg').addEventListener('click', () => openModal('addr'));
-      $('hmOut').addEventListener('click', async () => { await post({ action: 'logout' }); location.reload(); });
-      $('hmDel').addEventListener('click', async () => {
-        if (!confirm('Delete your saved home and account data from NYC Sim?')) return;
-        await post({ action: 'delete' }); location.reload();
-      });
-    }
-  }
-  function loadGsi() { // GIS is a CDN include like Three.js; loaded lazily, only when the modal needs it
-    const render = () => {
-      if (!S.gsiInit) {
-        window.google.accounts.id.initialize({ client_id: S.clientId, callback: onCred, ux_mode: 'popup' });
-        S.gsiInit = true;
-      }
-      const el = $('gsiBtn');
-      if (el) window.google.accounts.id.renderButton(el, { theme: 'filled_black', size: 'large', shape: 'pill' });
-    };
-    if (window.google && window.google.accounts) return render();
-    const s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
-    s.onload = render; s.onerror = () => stat('Google sign-in failed to load — check your connection');
-    document.head.appendChild(s);
-  }
-  async function onCred(resp) {
-    stat('signing in…');
-    const j = await post({ action: 'login', credential: resp.credential });
-    if (j.error) return stat(j.error);
-    S.signedIn = true; S.name = j.name; S.home = j.home;
-    if (S.home) { placeBeacon(); openModal('hub'); } else openModal('addr');
-  }
-
-  // ---- the one button action (desktop pill + GBA HOME share it) ----
-  function act() {
-    if (!S.signedIn) openModal('auth');
-    else if (!S.home) openModal('addr');
-    else flyHome();
-  }
-  $('homeBtn').addEventListener('click', act);
-  $('hmX').addEventListener('click', () => { closeModal(); resumeTour(); });
-  modal.addEventListener('pointerdown', (e) => { if (e.target === modal) { closeModal(); resumeTour(); } });
-  $('hpX').addEventListener('click', () => { panel.style.display = 'none'; });
-  $('hpGear').addEventListener('click', () => openModal(S.signedIn ? 'hub' : 'auth'));
-  chip.addEventListener('click', () => flyHome());
-
-  // ---- boot: one same-origin fetch decides everything (cookie rides along) ----
-  const api = { ready: false, act, tick, state: S,
-    _dev: (lat, lon, nb, bo) => { S.home = { lat, lon, neighborhood: nb || 'Test', borough: bo || 'Manhattan' }; placeBeacon(); flyHome(); } };
-  fetch('/api/home').then(r => r.json()).then(j => {
-    if (!j || !j.enabled) return; // unconfigured → RESET behavior + hidden pill, byte-identical app
-    S.on = true; S.clientId = j.clientId; S.signedIn = !!j.signedIn; S.name = j.name || null; S.home = j.home || null;
-    api.ready = true;
-    $('homeBtn').style.display = 'block';
-    const gb = $('gbaReset'); // §26e wired the indirection; here HOME takes the key
-    gb.dataset.l = 'HOME'; gb.setAttribute('aria-label', S.signedIn ? 'fly home' : 'sign in and set your home');
-    if (S.home) {
-      placeBeacon(); ensureStations();
-      // same deep-link guard as the auto-tour: hash-pinned screenshots/tests stay deterministic
-      if (!/cam=|tgt=|scrub=|snap/.test(location.hash)) S.pendingFly = true;
-    }
-  }).catch(() => { /* offline → app behaves as unconfigured */ });
-
-  // ---- per-frame: boot flight, chip glue (mirror-corrected), panel refresh ----
-  const _hv = new THREE.Vector3();
-  function tick() {
-    if (S.pendingFly) { S.pendingFly = false; flyHome(false); }
-    if (!S.home || !beacon) { chip.style.display = 'none'; return; }
-    _hv.set(S.hx, 34, S.hz).project(camera);
-    if (_hv.z > 1 || Math.abs(_hv.x) > 1.05 || Math.abs(_hv.y) > 1.05) chip.style.display = 'none';
-    else {
-      chip.style.display = 'block'; // .fybl base CSS is display:none (Iron Rule 6)
-      chip.style.transform = 'translate(' + ((0.5 - _hv.x * 0.5) * innerWidth - 26).toFixed(1) + 'px,' + // mirror: screen x = (0.5 − ndc.x/2)·w
-        ((0.5 - _hv.y * 0.5) * innerHeight - 34).toFixed(1) + 'px)';
-    }
-    if (panel.style.display === 'block' && T - S.panelT > 6) { S.panelT = T; renderPanel(); } // cheap local recompute
-  }
-  return api;
-})();
-window.__home = homeui; // §26e GBA indirection + dev/testing hook
-
 function frame() {
   if (window.__gbaBoot) window.__gbaBoot.done(); // §26e: first real frame → fade the boot screen (one-shot; done() nulls the hook)
   requestAnimationFrame(frame);
@@ -11246,7 +10933,6 @@ function frame() {
   flags.tick(dt, _focus, camY);
   concierge.tick(); // agent-layer label chips track their pins
   focusui.tick();    // the pinned focus dialogue tracks its entity
-  homeui.tick();     // §26f home beacon chip + boot-to-home flight + panel refresh
   linknyc.tick();    // kiosk focus ring follows focusmode's lifetime
   thoughts.tick();   // §25t Sims-style thought bubbles over residents
   personas.followTick(); // §25h follow-cam rides along with the clicked resident

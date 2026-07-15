@@ -6,36 +6,7 @@ the rules on adding entries.
 
 ---
 
-## 🏠 Home — sign in and the city opens at your block
-
-**Shipped:** July 14, 2026
-
-**TL;DR:** Sign in with Google, type your address once, and every visit to NYC Sim
-opens at your home — with a resident dashboard of your nearest trains, Citi Bikes,
-buses and ferries, live.
-
-**What you'll see:** A **HOME** button — on phones it takes over the GBA button that
-used to say RESET; on desktop it's a pill under the logo. Signed out, it opens Google
-sign-in; then you type your address ("350 5th Ave, Manhattan"), the camera pre-flies
-to the block it found, and you confirm "Yes, that's home." From then on: a small
-voxel cottage with a soft light column marks your block, a clickable 🏠 Home chip
-tracks it, the city boots straight to it, and the home panel reads like a stoop view —
-"34 St-Herald Sq · 248 m · B D F M" with the next arrivals in minutes, the nearest
-bike dock's live count, bus routes passing your corner, the closest ferry and its next
-stop. A ⚙ manages everything: change address, sign out, or delete your data outright.
-During timeline replay the panel says "replaying \<day\> — not live."
-
-**How it works:** Identity is [Google Sign-In](https://developers.google.com/identity/gsi/web)
-(verified server-side; we keep your first name and email — the email privately, only so
-we can reach out about feedback). The address is geocoded once through
-[Google Places](https://developers.google.com/maps/documentation/places/web-service) and
-then **discarded — the street address is never stored**; only the map coordinates
-(encrypted at rest in a private store) and the public-safe neighborhood name are kept.
-Nothing about your home is visible to anyone else. The dashboard invents no new data:
-it reads the same live [MTA GTFS-realtime](https://api.mta.info/), NYC Ferry,
-[Citi Bike GBFS](https://gbfs.citibikenyc.com/) and MTA Bus Time feeds the map already
-shows, anchored to your saved point. Deleting your home removes the stored record
-entirely and signs you out.
+## 🌾 Surveyed wetlands · 🚆 Staten Island Railway · 🚢 St George landmarks
 
 **Shipped:** July 14, 2026
 
