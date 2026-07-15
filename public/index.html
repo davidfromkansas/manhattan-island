@@ -1381,14 +1381,16 @@ const BX_RIVER = [[4938, 15176.3, 200], [4773.6, 16028.4, 150], [4442.5, 16847.4
 // English Kills, Maspeth Ck, East Branch). Same treatment as the Bronx River: it cuts
 // through the solid borough plate, so landOK carves it and a ribbon overlay paints it.
 const NT_CREEK = [
-  [[1840.9, 6186.2, 220], [2336.1, 6226.7, 160], [2832.2, 6230.4, 140], [3483.3, 6083.6, 130], [3906.8, 5979, 120], [4411.9, 6050.7, 110], [4712.2, 6116.8, 100]],
-  [[2754.7, 6305.7, 70], [2808.3, 6837.2, 60], [2821.1, 7216.6, 55]],
-  [[4712.2, 6116.8, 90], [5194.3, 6323.3, 70]],
-  [[4411.9, 6050.7, 90], [4553.7, 5580.6, 80], [4950.2, 5272.1, 70], [4896.2, 4864.4, 60]],
-  [[4712.2, 6116.8, 80], [5011.1, 5908.3, 60]]
+  // centerlines + widths refit to Census TIGER AREAWATER polygons (the hand-drawn course
+  // ran up to ~280 m south of the real channel and flooded the Greenpoint bank).
+  [[1748, 6129, 190], [2144.3, 6366, 100], [3024.4, 6368, 90], [3695.5, 6327.8, 80], [3831.8, 6292.3, 74], [4779.1, 6233.2, 110], [4801.4, 6221, 100]],
+  [[2985.6, 6444.4, 50], [2906.4, 6649.6, 60], [3144.6, 7323.8, 40]],
+  [[4801.4, 6221, 90], [5093.3, 6350.1, 43]],
+  [[4779.1, 6233.2, 90], [5009, 5480.8, 40], [5017.2, 5261.8, 41], [4962.5, 4904.2, 41]],
+  [[4801.4, 6221, 80], [5041.1, 5938.3, 60]]
 ];
 function inNtCreek(x, z) {
-  if (x < 1700 || x > 5400 || z < 4700 || z > 7400) return false;
+  if (x < 1380 || x > 5400 || z < 4700 || z > 7400) return false;
   for (const P of NT_CREEK) for (let i = 0; i < P.length - 1; i++) {
     const a = P[i], b = P[i + 1];
     const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
@@ -1397,6 +1399,44 @@ function inNtCreek(x, z) {
     if ((x - qx) * (x - qx) + (z - qz) * (z - qz) < w * w) return true;
   }
   return false;
+}
+// Interior water the ground layers wrongly cover (DCM lore audit): Flushing Bay margin +
+// Flushing Creek + Meadow/Willow Lakes (the qn-east backfill painted ground over them),
+// Gowanus Canal (solid chunk plate), and the named inland lakes citywide. Same capsule
+// treatment as the Bronx River / Newtown Creek: landOK carve + dark ribbon overlay.
+const QN_WATER = [
+  // Flushing system refit to Census TIGER AREAWATER (hand capsules sat ~200 m off-axis).
+  [[6500.5, 14191.2, 900], [6589, 14177, 950], [6900, 15100, 700]],                                    // Flushing Bay (LGA -> mouth at the East River channel)
+  [[7681, 13146, 380], [8011, 12685, 114], [8931.2, 12629.7, 115], [9652.4, 11389.4, 60], [9731, 10747, 110]], // Flushing Creek
+  [[9894, 10507, 205], [10224.6, 10335.5, 262], [10819.5, 9869.3, 237]],                               // Meadow Lake
+  [[10913.5, 9683.9, 141], [10864, 9752.9, 193]],                                                      // Willow Lake
+  [[15756, 7769, 240], [16073, 7536, 220]],                                                            // Baisley Pond
+  [[11332, 13142, 130], [11656, 13161, 110]]                                                           // Kissena Lake
+];
+const CITY_LAKES = [
+  [[2775, -587.2, 36], [2803.6, -1007.5, 36], [2613.6, -1283, 36], [2546.5, -2013.3, 50], [2506.1, -2185.7, 60]], // Gowanus Canal (TIGER-refit course)
+  [[5231, -1817, 240], [5152, -2428, 260]],                                                            // Prospect Park Lake
+  [[-1299, -9781, 260], [-1443, -10297, 300]],                                                         // Silver Lake (SI)
+  [[-2202, -10918, 120], [-2052, -11571, 130]],                                                        // Clove Lakes chain
+  [[-2478, -23646, 190], [-2568, -23949, 210]]                                                         // Wolfe's Pond
+];
+function inCapsules(SET, x, z) {
+  for (const P of SET) for (let i = 0; i < P.length - 1; i++) {
+    const a = P[i], b = P[i + 1];
+    const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / L2));
+    const qx = a[0] + t * dx, qz = a[1] + t * dz, w = (a[2] + (b[2] - a[2]) * t) / 2;
+    if ((x - qx) * (x - qx) + (z - qz) * (z - qz) < w * w) return true;
+  }
+  return false;
+}
+function inQnWater(x, z) {
+  if (x < 5000 || x > 16400 || z < 6800 || z > 15200) return false;
+  return inCapsules(QN_WATER, x, z);
+}
+function inCityLake(x, z) {
+  if (x < -3000 || x > 5600 || z < -24300 || z > -300) return false;
+  return inCapsules(CITY_LAKES, x, z);
 }
 function inBxRiver(x, z) {
   if (x < 700 || x > 5600 || z < 15300 || z > 25400) return false;
@@ -2656,6 +2696,8 @@ const riIslContains = makeContains(QB.ISL.ri);
 function landOK(x, z) {
   if (inBxRiver(x, z)) return false;                                  // Bronx River: lore-accurate water cut through the plate (before ANY land test)
   if (inNtCreek(x, z)) return false;                                  // Newtown Creek + Dutch/English Kills: same
+  if (inQnWater(x, z)) return false;                                  // Flushing Bay/Creek + Meadow/Willow/Baisley/Kissena: water the qn-east backfill covered
+  if (inCityLake(x, z)) return false;                                 // Gowanus Canal + named inland lakes (Prospect, Silver, Clove, Wolfe's)
   if (bayContains(x, z)) return false;
   { const qw = qwShoreX(z); if (qw !== null && x < qw && !riIslContains(x, z)) return false; } // East Channel is water (real DCP bank)
   if (typeof inQnEast === 'function' && inQnEast(x, z)) return true;   // eastern Queens real-fabric land (CD6/CD7 + Glendale)
@@ -4082,7 +4124,7 @@ await bootStep(0.7, 'paving the boroughs…'); // §26e boot bar (yield → repa
     const m = new THREE.Mesh(sinkToGeometry(S), patchCityMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), 0));
     m.matrixAutoUpdate = false; scene.add(m);
   }
-  for (const _wway of [BX_RIVER, ...NT_CREEK])
+  for (const _wway of [BX_RIVER, ...NT_CREEK, ...QN_WATER, ...CITY_LAKES])
   { // waterway ribbons (Bronx River, Newtown Creek + branches): dark water riding just above the plate
     const pos = [], idx = [];
     for (let i = 0; i < _wway.length; i++) {

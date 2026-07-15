@@ -62,6 +62,24 @@ WATER=[  # (lat0,lon0, lat1,lon1, width_m)
  (40.6440,-74.1450, 40.6480,-74.1900, 380),   # Kill Van Kull (west)
  (40.5470,-74.1372, 40.5428,-74.1335, 200),   # Great Kills Harbor (lagoon)
  (40.6230,-74.2025, 40.6450,-74.1935, 330),   # Arthur Kill (north channel)
+ # DCM lore audit: named inland lakes + Flushing system (also carved from `deep` below —
+ # the qn-east backfill painted ground over Flushing Bay/Creek and the FMCP lakes).
+ # Flushing system: refit to Census TIGER AREAWATER (hand capsules sat ~200 m off-axis
+ # and flooded lakeshore/bank fabric).
+ (40.7805,-73.8618, 40.7800,-73.8608, 950),   # Flushing Bay
+ (40.7800,-73.8608, 40.7868,-73.8541, 750),   # Flushing Bay (mouth at East River channel)
+ (40.7656,-73.8525, 40.7601,-73.8508, 300),   # Flushing Creek (bay reach)
+ (40.7601,-73.8508, 40.7549,-73.8399, 115),   # Flushing Creek (Willets Point bend)
+ (40.7549,-73.8399, 40.7412,-73.8381, 80),    # Flushing Creek (through FMCP)
+ (40.7412,-73.8381, 40.7356,-73.8409, 110),   # Flushing Creek (to Meadow Lake)
+ (40.7329,-73.8403, 40.7298,-73.8373, 240),   # Meadow Lake (north)
+ (40.7298,-73.8373, 40.7230,-73.8328, 250),   # Meadow Lake (south)
+ (40.7211,-73.8328, 40.7219,-73.8330, 170),   # Willow Lake
+ (40.6810,-73.7855, 40.6775,-73.7830, 230),   # Baisley Pond
+ (40.7470,-73.8085, 40.7455,-73.8045, 120),   # Kissena Lake
+ (40.6265,-74.0910, 40.6230,-74.0955, 210),   # Silver Lake (SI)
+ (40.6220,-74.1085, 40.6160,-74.1105, 125),   # Clove Lakes chain
+ (40.5215,-74.1855, 40.5195,-74.1890, 135),   # Wolfe's Pond
 ]
 def carve(land):
     for la0,lo0,la1,lo1,wd in WATER:
@@ -97,6 +115,40 @@ for (la,lo,rx,rz) in landpatch:
     land[sl]|=near[sl]
     cx0=(g0+g1)//2; ch0=(h0+h1)//2; rx2=int((g1-g0)*0.3); rz2=int((h1-h0)*0.3)
     land[max(0,cx0-rx2):min(W,cx0+rx2), max(0,ch0-rz2):min(H,ch0+rz2)]=True
+# ---- NYC PARKS PROPERTIES (Open Data enfh-gkve, 2,059 properties): every park citywide.
+# Skipped: Manhattan (its ground canvas paints parks), median strips/parkways/malls/undeveloped.
+# Land is added only within the near-building clip (Gateway-class properties span open water);
+# surveyed wetlands + water capsules run AFTER and re-carve anything wet.
+parkraster=np.zeros((W,H),bool)
+try:
+    PK=json.load(open('/private/tmp/claude-501/-Users-david-lietjauw/774ad873-7b5f-4951-84dd-2365510893f4/scratchpad/nyc_parks.json'))['features']
+except Exception as e:
+    PK=[]; print('parks load failed:',e)
+from matplotlib.path import Path as _MP
+SKIPT={'Strip','Parkway','Mall','Undeveloped'}
+npk=0
+for ft in PK:
+    pr=ft['properties']
+    if pr.get('borough')=='M' or pr.get('typecategory') in SKIPT: continue
+    g=ft.get('geometry')
+    if not g: continue
+    polys=g['coordinates'] if g['type']=='MultiPolygon' else [g['coordinates']]
+    for poly in polys:
+        rings=[np.array([geoRaw_ll(la,lo) for lo,la in ring]) for ring in poly if len(ring)>=3]
+        if not rings: continue
+        xs=np.concatenate([r[:,0] for r in rings]); zs=np.concatenate([r[:,1] for r in rings])
+        g0=max(0,int((xs.min()-X0)//CELL)); g1=min(W,int((xs.max()-X0)//CELL)+1)
+        h0=max(0,int((zs.min()-Z0)//CELL)); h1=min(H,int((zs.max()-Z0)//CELL)+1)
+        if g0>=g1 or h0>=h1: continue
+        gxs=np.arange(g0,g1); gzs=np.arange(h0,h1)
+        PX,PZ=np.meshgrid(X0+gxs*CELL+CELL/2, Z0+gzs*CELL+CELL/2, indexing='ij')
+        pts=np.column_stack([PX.ravel(),PZ.ravel()])
+        inside=np.zeros(len(pts),bool)
+        for r in rings: inside ^= _MP(r).contains_points(pts)
+        parkraster[g0:g1,h0:h1] |= inside.reshape(len(gxs),len(gzs))
+    npk+=1
+land |= (parkraster & near)   # parks are land, but only near real coverage (no bay-greening)
+print('parks rasterized:',npk,'park cells:',int(parkraster.sum()))
 land|=(mask & dil(dil(land)))   # building cells re-join land only if adjacent to it (keeps shore strips, drops mid-channel piers/barges)
 # ---- SURVEYED WETLANDS (NYC Open Data p48c-iqtu): Water classes -> open water; Estuarine/Emergent
 # -> marsh; Forested/Scrub-Shrub -> wooded green (joins the park/tree treatment).
@@ -135,6 +187,7 @@ for ft in WET:
         nw+=1
 print('wetland polys rasterized:',nw,'marsh cells:',int(marshm.sum()))
 land=carve(land)
+park |= parkraster & land     # dataset parks color the mask ground (green + trees)
 print('land cells:',int(land.sum()),flush=True)
 # 1) bitmask json (MSB-first, bit = gx*H+gz)
 bits=np.zeros(((W*H+7)//8,),np.uint8)
@@ -179,6 +232,7 @@ try:
             if (qb[k>>3]>>(7-(k&7)))&1 and not offp[gx,gz]: deep[gx,gz]=True
 except Exception as e:
     print('qn-east-land backfill failed:',e)
+deep=carve(deep)   # qn-east bits cover Flushing Bay/Creek + FMCP lakes: never backfill real water
 print('deep backfill cells:',int(deep.sum()))
 # beach: southernmost land run edge (Coney/Manhattan Beach) → sand for the 2 cells bordering south water, z<-9300
 V=[];F=[];C=[]
@@ -242,6 +296,28 @@ for gx in range(W):
         while g2<H and deep[gx,g2]: g2+=1
         quad_deep(x,x+CELL,Z0+gz*CELL,Z0+g2*CELL,tuple(int(c*255) for c in gc_col))
         gz=g2
+# on-plate park overlay (legacy plates paint tan; these ride just above at y=1.28)
+PGC=tuple(int(c*255) for c in (0.30,0.40,0.24))
+def quad_over(x0,x1,z0,z1):
+    b=len(V)
+    for (x,z) in [(x0,z0),(x1,z0),(x1,z1),(x0,z1)]: V.append((x,1.28,z)); C.append(PGC)
+    F.append((b,b+2,b+1)); F.append((b,b+3,b+2))
+nover=0
+for gx in range(W):
+    x=X0+gx*CELL
+    gz=0
+    while gz<H:
+        if not (parkraster[gx,gz] and land[gx,gz] and not offp[gx,gz] and not deep[gx,gz]): gz+=1; continue
+        g2=gz
+        while g2<H and parkraster[gx,g2] and land[gx,g2] and not offp[gx,g2] and not deep[gx,g2]: g2+=1
+        quad_over(x,x+CELL,Z0+gz*CELL,Z0+g2*CELL); nover+=1
+        for cz in range(gz,g2):
+            h=(gx*2654435761 ^ cz*40503)&0xffff
+            if h%100<14:
+                tx=x+(h%37)/37*CELL; tz=Z0+cz*CELL+((h>>6)%41)/41*CELL
+                bcell(tx,tz,3.4+(h%13)/13*2.4,4.5+(h%23)/23*4.5,(int(255*0.20),int(255*0.34),int(255*0.15)))
+        gz=g2
+print('on-plate park overlay runs:',nover)
 V=np.array(V,np.float32);F=np.array(F,np.uint32);C=np.array(C,np.uint8)
 lo=V.min(0);span=V.max(0)-lo;span[span==0]=1;Q=np.round((V-lo)/span*65535).astype('<u2')
 i32=1 if len(V)>65535 else 0; idxb=F.astype('<u4') if i32 else F.astype('<u2')

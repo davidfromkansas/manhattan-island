@@ -6,6 +6,41 @@ the rules on adding entries.
 
 ---
 
+## 🌳 Every NYC park · 🗺️ Official-map lore audit · 🌊 Real lakes, creeks & canals
+
+**Shipped:** July 15, 2026
+
+**TL;DR:** All 1,515 buildable NYC Parks properties now render citywide as green,
+tree-scattered ground; a full lore audit against the official Digital City Map found
+and fixed ~2,000 missing far-east Queens streets; and the city's interior water is
+finally real — Flushing Bay/Creek, Meadow & Willow Lakes, the Gowanus Canal, and the
+named lakes of every borough, with every waterway refit to surveyed channel polygons
+so buildings sit on the banks, not in the water.
+
+**What you'll see:** Playground and park speckle through every neighborhood, Prospect
+Park and Green-Wood in full canopy, Cunningham/Alley Pond/Kissena green in east Queens;
+Flushing Bay as open water beside LGA with Flushing Creek winding through Flushing
+Meadows into its two lakes; the Gowanus Canal cutting its true course to Gowanus Bay;
+Prospect Park Lake, Baisley Pond, Kissena Lake, Silver Lake, Clove Lakes and Wolfe's
+Pond; the street grid running all the way to the Nassau line (Queens Village, Cambria
+Heights, Laurelton, Rosedale, Bellerose, Little Neck); and Newtown Creek hugging its
+real channel. The City Concierge now knows all five boroughs are built and can fly
+anywhere — Tottenville included (its old bounds stopped at Sheepshead Bay).
+
+**How it works:** Parks Properties (Open Data `enfh-gkve`, 2,059 features) rasterize
+into the land mask (near-building clip keeps bay-spanning properties from greening
+open water; surveyed wetlands re-carve anything wet), plus an on-plate green overlay
+where streamed chunks own the ground. The audit matched every built segment of the
+DCM street centerline layer (`m2vu-mgzw`/`g6zj-tzgn`) against the street graph —
+99.7–99.9 % in four boroughs, and a clipped fetch in far-east Queens fixed by
+appending 1,986 CSCL segments. Waterway capsules (landOK carve + dark ribbon) were
+refit vertex-by-vertex to Census TIGER AREAWATER polygons — the hand-drawn Newtown
+Creek ran up to 280 m off the real channel — and the ground-mask bake carves the same
+shapes from the backfill layer ([scripts/bk_south_land.py](scripts/bk_south_land.py),
+[scripts/qn_east_streets.py](scripts/qn_east_streets.py)).
+
+---
+
 ## 🌾 Surveyed wetlands · 🚆 Staten Island Railway · 🚢 St George landmarks
 
 **Shipped:** July 14, 2026
