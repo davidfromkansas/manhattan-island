@@ -39,10 +39,13 @@ assert.equal(packForDay('2026-11-01').frames.length, 25);
 (async () => {
   const official = await loadAirNowDay('2026-07-16', {
     apiKey: 'test',
-    fetchImpl: async () => new Response(JSON.stringify([
-      { DateObserved: '2026-07-16', HourObserved: 0, LocalTimeZone: 'EDT', ReportingArea: 'New York City Region', ParameterName: 'PM2.5', AQI: 56, Category: { Name: 'Moderate' } },
-      { ReportingArea: 'New York City Region', ParameterName: 'O3', AQI: 30 }
-    ]), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    fetchImpl: async url => {
+      assert.match(String(url), /date=2026-07-16T00-0000/);
+      return new Response(JSON.stringify([
+        { DateObserved: '2026-07-16', HourObserved: 0, LocalTimeZone: 'EDT', ReportingArea: 'New York City Region', ParameterName: 'PM2.5', AQI: 56, Category: { Name: 'Moderate' } },
+        { ReportingArea: 'New York City Region', ParameterName: 'O3', AQI: 30 }
+      ]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
   });
   assert.equal(official.aqi, 56);
   assert.equal(official.category, 'Moderate');
