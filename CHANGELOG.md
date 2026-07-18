@@ -12,7 +12,7 @@ the rules on adding entries.
 
 **TL;DR:** The City Concierge pigeon now sits on a lightly colored squircle so it reads clearly as a button.
 
-**What you'll see:** A subtle pale-blue button surface, light border, and soft depth frame the pigeon and its **Talk to me!** label. Hover, press, and keyboard-focus states provide immediate interaction feedback without obscuring the city.
+**What you'll see:** A subtle pale-blue button surface, light border, and soft depth frame the pigeon and its **Talk to me!** label. The button is larger and easier to notice and tap on mobile. Hover, press, and keyboard-focus states provide immediate interaction feedback without obscuring the city.
 
 **How it works:** The existing Concierge trigger keeps its same behavior and responsive sizing, with the visual affordance applied entirely through CSS.
 
