@@ -6,6 +6,18 @@ the rules on adding entries.
 
 ---
 
+## 🐦 City Concierge looks clickable
+
+**Shipped:** July 18, 2026
+
+**TL;DR:** The City Concierge pigeon now sits on a lightly colored squircle so it reads clearly as a button.
+
+**What you'll see:** A subtle pale-blue button surface, light border, and soft depth frame the pigeon and its **Talk to me!** label. Hover, press, and keyboard-focus states provide immediate interaction feedback without obscuring the city.
+
+**How it works:** The existing Concierge trigger keeps its same behavior and responsive sizing, with the visual affordance applied entirely through CSS.
+
+---
+
 ## 🎮 Home and Air Quality clear the mobile D-pad
 
 **Shipped:** July 18, 2026

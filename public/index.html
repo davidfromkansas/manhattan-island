@@ -299,12 +299,17 @@
   }
   body.photo #chipRow, body.manual #chipRow, body.photo #scrub, body.manual #scrub { opacity:0; pointer-events:none; }
   #agentFab { /* the concierge persona — pigeon + "Talk to me!" artwork (public/pigeon_back.png) */
-    position:fixed; right:12px; bottom:8px; z-index:31; width:192px; cursor:pointer;
-    padding:0; border:none; background:none; transition:opacity .4s, transform .25s;
-    filter:drop-shadow(0 4px 10px rgba(0,0,0,.5));
+    position:fixed; right:12px; bottom:8px; z-index:31; width:192px; box-sizing:border-box; cursor:pointer;
+    padding:7px 7px 4px; border:2px solid rgba(239,249,255,.9); border-radius:28%;
+    background:linear-gradient(160deg,rgba(226,244,255,.88),rgba(185,220,247,.78));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 5px 14px rgba(5,25,60,.38);
+    transition:opacity .4s, transform .25s, filter .2s, box-shadow .2s;
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,.35));
   }
   #agentFab img { display:block; width:100%; pointer-events:none; }
-  #agentFab:hover { transform:scale(1.05) translateY(-2px); }
+  #agentFab:hover { transform:scale(1.05) translateY(-2px); filter:brightness(1.04) drop-shadow(0 5px 11px rgba(0,0,0,.35)); }
+  #agentFab:active { transform:scale(.97); box-shadow:inset 0 2px 5px rgba(49,90,135,.28),0 2px 7px rgba(5,25,60,.32); }
+  #agentFab:focus-visible { outline:3px solid #83c9f4; outline-offset:3px; }
   @media (max-width: 600px) { #agentFab { width:126px; right:6px; bottom:calc(64px + env(safe-area-inset-bottom, 0px)); } } /* just above the two ticker strips */
   #cameraPanel {
     position:fixed; left:0; bottom:0; z-index:31; width:650px; height:184px; box-sizing:border-box;
