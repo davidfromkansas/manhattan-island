@@ -5,7 +5,7 @@
    Optional: CRON_SECRET (Vercel sends it as a Bearer token if configured). */
 const { dayAt, loadDay: loadAirQualityDay } = require('../lib/air-quality-history');
 
-const REPO = 'davidfromkansas/manhattan-island';
+const REPO = 'davidfromkansas/nycsim';
 const BRANCH = 'data';
 const RETENTION_DAYS = 7;
 const AQ_RETENTION_DAYS = 30;

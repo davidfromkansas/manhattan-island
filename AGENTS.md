@@ -30,8 +30,8 @@ a nightly recorder + timeline slider that replays seven daily city snapshots and
 - Other `plan-*.md` files: see the Plans index below — most are shipped history,
   and UNTRACKED plan files belong to other in-flight sessions (leave them alone).
 
-- **Repo**: `github.com/davidfromkansas/manhattan-island` (private). Pull `main`.
-  `git clone git@github.com:davidfromkansas/manhattan-island.git`
+- **Repo**: `github.com/davidfromkansas/nycsim` (private). Pull `main`.
+  `git clone git@github.com:davidfromkansas/nycsim.git`
 - **Prod**: https://manhattan-island-davidlietjauw-7177s-projects.vercel.app
   (Vercel auto-deploys every push to `main` — a push IS a deploy; don't push broken code)
 - **`data` branch**: orphan branch holding recorded daily city snapshots and packed Air Quality days
