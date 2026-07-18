@@ -6,6 +6,18 @@ the rules on adding entries.
 
 ---
 
+## 🎮 Home and Air Quality clear the mobile D-pad
+
+**Shipped:** July 18, 2026
+
+**TL;DR:** Home and Air Quality now sit side by side at the top of the blue mobile controls instead of covering the directional pad.
+
+**What you'll see:** On portrait phones, both feature buttons remain inside the blue console area but occupy a compact top row. The full directional pad below stays visible and every direction remains easy to press, including on short screens.
+
+**How it works:** GBA-mode-only positioning anchors the two buttons to the rendered screen boundary and sizes each to a 62-pixel square. At the console's minimum supported height, their touch bounds end above the vertically centered D-pad; desktop and non-GBA layouts are unchanged.
+
+---
+
 ## ☀️ Daylight links keep the whole city live
 
 **Shipped:** July 17, 2026
